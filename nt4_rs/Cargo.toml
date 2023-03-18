@@ -1,0 +1,16 @@
+[package]
+name = "nt4_rs"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+
+[dependencies]
+async-trait = "0.1.67"
+log = "0.4.17"
+tokio = "1.26.0"
+wpilib-hal = { path = "../wpilib-hal" }
+
+[build-dependencies]
+anyhow = "1.0.69"
+cargo_metadata = "0.15.3"
