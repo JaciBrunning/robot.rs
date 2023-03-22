@@ -95,6 +95,8 @@ async fn auto_routine<'a, E: AbstractElevator<'a>>(elevator: &'a E) -> ElevatorR
   info!("Auto Start");
   let control = elevator.control().steal().await;
 
+  // Note the `.await?`. The question-mark operator allows the auto routine to bail early
+  // if the control lock gets stolen, or the elevator otherwise runs into an error.
   elevator.go_to_height(0.5, &control).await?;
   elevator.go_to_height(1.0, &control).await?;
   elevator.go_to_height(0.75, &control).await?;
