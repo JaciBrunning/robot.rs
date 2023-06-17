@@ -4,11 +4,11 @@ An experimental FRC robotics framework, written in Rust.
 
 ## Notes on Getting Started
 Currently, this is just experimental, so getting it running takes a little bit of legwork. Foremostly, there are a set of libs from WPI that have to be copied into the `wpilib-hal` project. Copy the following libs for your platform to `wpilib-hal/libs/` and its associated headers to `wpilib-hal/include/`:
-- ntcore
-- wpiHal
-- wpimath
-- wpinet
-- wpiutil
+- [ntcore](https://github.com/wpilibsuite/allwpilib/tree/main/ntcore)
+- [wpiHal]()
+- [wpimath](https://github.com/wpilibsuite/allwpilib/tree/main/wpimath)
+- [wpinet](https://github.com/wpilibsuite/allwpilib/tree/main/wpinet)
+- [wpiutil](https://github.com/wpilibsuite/allwpilib/tree/main/wpiutil)
 
 You can also optionally include `halsim_gui` and set the `HALSIM_EXTENSIONS` environment variables if you want to include a simulation GUI.
 
