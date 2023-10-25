@@ -1,7 +1,7 @@
+pub mod entry;
 pub mod instance;
 pub mod topic;
 pub mod types;
-pub mod entry;
 
 #[macro_export]
 macro_rules! nt {
