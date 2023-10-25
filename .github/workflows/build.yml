@@ -1,0 +1,22 @@
+name: Build-Checks
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  Ubuntu-Build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install
+      run: |
+        chmod +x install.sh
+        ./install.sh
+    - name: Build
+      run: cargo build
+        
