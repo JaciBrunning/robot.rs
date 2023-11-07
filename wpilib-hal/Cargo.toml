@@ -16,4 +16,4 @@ libs_dir = ["libs/"]
 [dependencies]
 
 [build-dependencies]
-bindgen = "0.68.1"
+bindgen = "0.69.1"
