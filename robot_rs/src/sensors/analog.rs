@@ -1,3 +1,3 @@
 pub trait AnalogInput {
-  fn get(&self) -> f64;
+    fn get(&self) -> f64;
 }

@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/nt4_rs"
+    schedule:
+      interval: "weekly"
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/robot_rs"
+    schedule:
+      interval: "weekly"
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/wpilib-hal"
+    schedule:
+      interval: "weekly"

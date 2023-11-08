@@ -1,10 +1,10 @@
 pub struct MinMax<T> {
-  pub min: T,
-  pub max: T
+    pub min: T,
+    pub max: T,
 }
 
 impl<T> MinMax<T> {
-  pub fn new(min: T, max: T) -> Self {
-    Self { min, max }
-  }
+    pub fn new(min: T, max: T) -> Self {
+        Self { min, max }
+    }
 }
