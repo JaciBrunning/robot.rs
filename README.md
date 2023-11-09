@@ -10,7 +10,9 @@ Currently, this is just experimental, so getting it running takes a little bit o
 - [wpinet](https://github.com/wpilibsuite/allwpilib/tree/main/wpinet)
 - [wpiutil](https://github.com/wpilibsuite/allwpilib/tree/main/wpiutil)
 
-You can also optionally include `halsim_gui` and set the `HALSIM_EXTENSIONS` environment variables if you want to include a simulation GUI.
+You can also optionally include `halsim_gui` and set the `HALSIM_EXTENSIONS` environment variables if you want to include a simulation GUI.  
+
+This can be done in two different ways. First you can use the provided install script for your platform (.sh for Linux/MacOS and .ps1 for Windows) or second you can manually download and copy the folders from the provided links.
 
 ## A few examples
 ### Composable IO

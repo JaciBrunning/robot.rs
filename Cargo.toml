@@ -4,3 +4,6 @@ members = [
   "robot_rs",
   "wpilib-hal"
 ]
+
+resolver = '2'
+

@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.njk": "html",
+        "*.sk": "sack",
+        "cstdlib": "cpp"
+    }
+}

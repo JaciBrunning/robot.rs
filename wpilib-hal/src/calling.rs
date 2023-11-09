@@ -1,21 +1,24 @@
-use std::{ffi::CStr, fmt::{Debug, Display}};
 use crate::HAL_GetLastError;
+use std::{
+    ffi::CStr,
+    fmt::{Debug, Display},
+};
 
 // Parts borrowed from https://github.com/first-rust-competition/first-rust-competition/blob/master/wpilib-sys/src/hal_call.rs
 #[derive(Debug)]
 pub struct WpiHalError(String);
 
 impl WpiHalError {
-  pub fn new(mut status: i32) -> Self {
-    let str = unsafe { CStr::from_ptr(HAL_GetLastError(&mut status)) };
-    Self(str.to_string_lossy().to_string())
-  }
+    pub fn new(mut status: i32) -> Self {
+        let str = unsafe { CStr::from_ptr(HAL_GetLastError(&mut status)) };
+        Self(str.to_string_lossy().to_string())
+    }
 }
 
 impl Display for WpiHalError {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "HAL Error: \"{}\"", self.0)
-  }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "HAL Error: \"{}\"", self.0)
+    }
 }
 
 pub type WpiHalResult<T> = Result<T, WpiHalError>;
