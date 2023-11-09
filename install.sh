@@ -1,4 +1,4 @@
-git clone https://github.com/wpilibsuite/allwpilib.git
+git clone https://github.com/spacey-sooty/allwpilib.git
 
 mv allwpilib/ntcore wpilib-hal/libs/ntcore
 mv allwpilib/hal wpilib-hal/libs/hal
