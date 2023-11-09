@@ -18,9 +18,7 @@ impl Entry {
     pub fn new(inst: &NetworkTableInstance, name: &str) -> Self {
         let cstr = CString::new(name).unwrap();
         Self {
-            handle: unsafe {
-                NT_GetEntry(inst.handle, cstr.as_ptr(), cstr.as_bytes().len() as u64)
-            },
+            handle: unsafe { NT_GetEntry(inst.handle, cstr.as_ptr(), cstr.as_bytes().len()) },
         }
     }
 

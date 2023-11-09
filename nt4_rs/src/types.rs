@@ -87,7 +87,7 @@ impl From<NT_Value> for ValueContext {
             NT_Type::NT_STRING => Value::String({
                 std::str::from_utf8(unsafe {
                     std::slice::from_raw_parts(
-                        value.data.v_string.str as *const u8,
+                        value.data.v_string.str_ as *const u8,
                         value.data.v_string.len as usize,
                     )
                 })
@@ -132,7 +132,7 @@ impl From<NT_Value> for ValueContext {
                         .iter()
                         .map(|s| {
                             std::str::from_utf8(unsafe {
-                                std::slice::from_raw_parts(s.str as *const u8, s.len as usize)
+                                std::slice::from_raw_parts(s.str_ as *const u8, s.len as usize)
                             })
                             .unwrap()
                             .to_owned()
@@ -201,13 +201,13 @@ impl Value {
             }),
             Value::String(v) => {
                 ntv.type_ = NT_Type::NT_STRING;
-                ntv.data.v_string.len = v.as_bytes().len() as u64;
-                ntv.data.v_string.str = v.as_ptr() as *mut i8; // These casts are very unsafe, but we make the assumption that NT doesn't mutate the pointer
+                ntv.data.v_string.len = v.as_bytes().len();
+                ntv.data.v_string.str_ = v.as_ptr() as *mut i8; // These casts are very unsafe, but we make the assumption that NT doesn't mutate the pointer
                 f(ntv)
             }
             Value::Raw(v) => {
                 ntv.type_ = NT_Type::NT_RAW;
-                ntv.data.v_raw.size = v.len() as u64;
+                ntv.data.v_raw.size = v.len();
                 ntv.data.v_raw.data = v.as_ptr() as *mut u8; // These casts are very unsafe, but we make the assumption that NT doesn't mutate the pointer
                 f(ntv)
             }
@@ -218,13 +218,13 @@ impl Value {
                 }
 
                 ntv.type_ = NT_Type::NT_BOOLEAN_ARRAY;
-                ntv.data.arr_boolean.size = arr.len() as u64;
+                ntv.data.arr_boolean.size = arr.len();
                 ntv.data.arr_boolean.arr = buf.as_ptr() as *mut i32;
                 f(ntv)
             }
             Value::DoubleArray(arr) => {
                 ntv.type_ = NT_Type::NT_DOUBLE_ARRAY;
-                ntv.data.arr_double.size = arr.len() as u64;
+                ntv.data.arr_double.size = arr.len();
                 ntv.data.arr_double.arr = arr.as_ptr() as *mut f64;
                 f(ntv)
             }
@@ -232,13 +232,13 @@ impl Value {
                 let mut buf = vec![Default::default(); arr.len()];
                 for i in 0..arr.len() {
                     buf[i] = NT_String {
-                        str: arr[i].as_ptr() as *mut i8,
-                        len: arr[i].len() as u64,
+                        str_: arr[i].as_ptr() as *mut i8,
+                        len: arr[i].len(),
                     }
                 }
 
                 ntv.type_ = NT_Type::NT_STRING_ARRAY;
-                ntv.data.arr_string.size = arr.len() as u64;
+                ntv.data.arr_string.size = arr.len();
                 ntv.data.arr_string.arr = buf.as_ptr() as *mut NT_String;
                 f(ntv)
             }
@@ -259,13 +259,13 @@ impl Value {
                 }
 
                 ntv.type_ = NT_Type::NT_INTEGER_ARRAY;
-                ntv.data.arr_int.size = arr.len() as u64;
+                ntv.data.arr_int.size = arr.len();
                 ntv.data.arr_int.arr = buf.as_ptr() as *mut i64;
                 f(ntv)
             }
             Value::FloatArray(arr) => {
                 ntv.type_ = NT_Type::NT_FLOAT_ARRAY;
-                ntv.data.arr_float.size = arr.len() as u64;
+                ntv.data.arr_float.size = arr.len();
                 ntv.data.arr_float.arr = arr.as_ptr() as *mut f32;
                 f(ntv)
             }

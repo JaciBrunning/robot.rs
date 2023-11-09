@@ -1,8 +1,9 @@
 use wpilib_hal::{
-    hal_safe_call, HAL_DigitalHandle, HAL_FreePWMPort, HAL_GetPWMPosition, HAL_GetPWMRaw,
-    HAL_GetPWMSpeed, HAL_GetPort, HAL_InitializePWMPort, HAL_LatchPWMZero, HAL_SetPWMConfig,
-    HAL_SetPWMConfigRaw, HAL_SetPWMDisabled, HAL_SetPWMEliminateDeadband, HAL_SetPWMPeriodScale,
-    HAL_SetPWMPosition, HAL_SetPWMRaw, HAL_SetPWMSpeed,
+    hal_safe_call, HAL_DigitalHandle, HAL_FreePWMPort, HAL_GetPWMPosition,
+    HAL_GetPWMPulseTimeMicroseconds, HAL_GetPWMSpeed, HAL_GetPort, HAL_InitializePWMPort,
+    HAL_LatchPWMZero, HAL_SetPWMConfigMicroseconds, HAL_SetPWMDisabled,
+    HAL_SetPWMEliminateDeadband, HAL_SetPWMPeriodScale, HAL_SetPWMPosition,
+    HAL_SetPWMPulseTimeMicroseconds, HAL_SetPWMSpeed,
 };
 
 use crate::macros::wrapped_traits_nogen;
@@ -35,11 +36,11 @@ impl PWM {
     }
 
     pub fn set_raw(&mut self, value: u16) {
-        hal_safe_call!(HAL_SetPWMRaw(self.handle, value as i32)).unwrap();
+        hal_safe_call!(HAL_SetPWMPulseTimeMicroseconds(self.handle, value as i32)).unwrap();
     }
 
     pub fn get_raw(&self) -> u16 {
-        hal_safe_call!(HAL_GetPWMRaw(self.handle)).unwrap() as u16
+        hal_safe_call!(HAL_GetPWMPulseTimeMicroseconds(self.handle)).unwrap() as u16
     }
 
     pub fn set_period_multiplier(&mut self, multiplier: PWMPeriodMultiplier) {
@@ -62,34 +63,15 @@ impl PWM {
         hal_safe_call!(HAL_SetPWMEliminateDeadband(self.handle, eliminate as i32)).unwrap()
     }
 
-    pub fn set_raw_bounds(
-        &mut self,
-        max: u16,
-        deadband_max: u16,
-        center: u16,
-        deadband_min: u16,
-        min: u16,
-    ) {
-        hal_safe_call!(HAL_SetPWMConfigRaw(
-            self.handle,
-            max as i32,
-            deadband_max as i32,
-            center as i32,
-            deadband_min as i32,
-            min as i32
-        ))
-        .unwrap()
-    }
-
     pub fn set_bounds(
         &mut self,
-        max: f64,
-        deadband_max: f64,
-        center: f64,
-        deadband_min: f64,
-        min: f64,
+        max: i32,
+        deadband_max: i32,
+        center: i32,
+        deadband_min: i32,
+        min: i32,
     ) {
-        hal_safe_call!(HAL_SetPWMConfig(
+        hal_safe_call!(HAL_SetPWMConfigMicroseconds(
             self.handle,
             max,
             deadband_max,
