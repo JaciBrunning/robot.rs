@@ -5,7 +5,6 @@ use std::sync::Arc;
 use elevator::{Elevator, AbstractElevator, ElevatorResult};
 use futures::{future::join_all, FutureExt};
 use log::info;
-use nt4_rs::instance::NetworkTableInstance;
 use robot_rs::{start::RobotResult, robot_main, actuators::motors::{PWMSparkMax, ClampedMotor}, sensors::{analog::AnalogInput, distance::NaiveDistanceSource}, input::xbox::Xbox, control::{edge_detect::Edge, pid::PIDConfig}, types::MinMax, models::DcMotor, robot_init};
 use tokio::sync::RwLock;
 
@@ -78,7 +77,6 @@ async fn init<'a, E: AbstractElevator<'a> + Send + Sync>(elevator: &'a E, xbox: 
 
 /// Main robot entry function.
 async fn my_async_robot() -> RobotResult {
-  NetworkTableInstance::default().start_server(Default::default());
 
   let xbox = Xbox::new(0);
 
