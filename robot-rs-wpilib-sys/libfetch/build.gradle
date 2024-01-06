@@ -1,0 +1,129 @@
+plugins {
+  id 'cpp'
+  id 'edu.wpi.first.wpilib.repositories.WPILibRepositoriesPlugin' version '2020.2'
+  id 'edu.wpi.first.NativeUtils' version '2024.7.0'
+}
+
+repositories {
+  mavenCentral()
+  maven {
+    url = uri("${project.getRootDir()}/grapplefrcdriver/target/zips")
+  }
+}
+
+if (project.hasProperty('releaseMode')) {
+  wpilibRepositories.addAllReleaseRepositories(project)
+} else {
+  wpilibRepositories.addAllDevelopmentRepositories(project)
+}
+
+// Apply C++ configuration
+apply from: 'config.gradle'
+
+// Set up exports properly
+nativeUtils {
+  exportsConfigs {
+    // Main library is just default empty. This will export everything
+    libfetch { }
+  }
+  platformConfigs {
+    "linuxx64-64" {
+      platformPath = "linux/x86-64"
+    }
+  }
+}
+
+def rust_triple(targetPlatform) {
+  def platformName = targetPlatform.name
+  if (platformName == "linuxathena") {
+    return "arm-unknown-linux-gnueabi"
+  } else if (platformName == "linuxarm32") {
+    return "arm-unknown-linux-gnueabihf"
+  } else if (platformName == "linuxarm64") {
+    return "aarch64-unknown-linux-gnu"
+  } else if (platformName == "linuxx86-64") {
+    return "x86_64-unknown-linux-gnu"
+  } else if (platformName == "osxuniversal") {
+    return "x86_64-apple-darwin"
+  } else if (platformName == "windowsx86-64") {
+    return "x86_64-pc-windows-msvc"
+  } else if (platformName == "windowsarm64") {
+    return "aarch64-pc-windows-msvc"
+  } else {
+      println "Unknown target platform $platformName"
+      return null
+  }
+}
+
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+
+def sets = ["hal_shared", "ni_link_libraries", "ntcore_shared"]
+
+
+task updateRustLibs() {
+  doLast {
+    println(nativeUtils.platforms)
+    sets.forEach { setName -> {
+      nativeUtils.nativeDependencyContainer.getByName(setName, libset -> {
+        def debugBuildType = nativeUtils.buildTypes.named('debug').get()
+        def releaseBuildType = nativeUtils.buildTypes.named('release').get()
+        for (targetPlatform in nativeUtils.platforms) {
+          def resolved = libset.resolveNativeDependency(targetPlatform, releaseBuildType, java.util.Optional.empty()).get()
+          def resolvedDebug = libset.resolveNativeDependency(targetPlatform, debugBuildType, java.util.Optional.empty()).get()
+
+          def headers = []
+          def libs = []
+
+          resolved.getLinkFiles().forEach({ f -> libs += f })
+          resolvedDebug.getLinkFiles().forEach({ f -> libs += f })
+          resolved.getIncludeRoots().forEach({ f -> headers += f })
+
+          def triple = rust_triple(targetPlatform)
+          def outdir = project.file("../vendor/${triple}")
+          new File(outdir, "libs").mkdirs()
+          new File(outdir, "headers").mkdirs()
+
+          libs.forEach({ lf ->
+            copy {
+              from lf
+              into "${outdir}/libs"
+            }
+          })
+
+          headers.forEach({ hd ->
+            copy {
+              from hd
+              into "${outdir}/headers"
+            }
+          })
+
+          if (targetPlatform.name == "osxuniversal") {
+            // 2nd copy needed for arm
+            outdir = project.file("grapplefrcdriver/buildlibs/aarch64-apple-darwin")
+            new File(outdir, "libs").mkdirs()
+            new File(outdir, "headers").mkdirs()
+
+            libs.forEach({ lf ->
+              copy {
+                from lf
+                into "${outdir}/libs"
+              }
+            })
+
+            headers.forEach({ hd ->
+              copy {
+                from hd
+                into "${outdir}/headers"
+              }
+            })
+          }
+        }
+      })
+    }}
+  }
+}
+
+wrapper {
+  gradleVersion '8.5'
+}
