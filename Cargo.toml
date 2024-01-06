@@ -1,7 +1,6 @@
 [workspace]
 members = [
-  "nt4_rs",
-  "robot_rs",
-  "wpilib-hal",
+  # "nt4_rs",
+  # "robot_rs",
   "robot-rs-wpilib-sys"
 ]

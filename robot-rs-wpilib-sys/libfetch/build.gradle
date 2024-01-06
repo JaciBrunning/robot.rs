@@ -58,12 +58,10 @@ def rust_triple(targetPlatform) {
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
-def sets = ["hal_shared", "ni_link_libraries", "ntcore_shared"]
-
+def sets = ["hal_shared", "wpiutil_shared", "ni_link_libraries", "ntcore_shared"]
 
 task updateRustLibs() {
   doLast {
-    println(nativeUtils.platforms)
     sets.forEach { setName -> {
       nativeUtils.nativeDependencyContainer.getByName(setName, libset -> {
         def debugBuildType = nativeUtils.buildTypes.named('debug').get()
