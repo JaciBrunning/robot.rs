@@ -30,52 +30,39 @@ pub trait MotorCurrentDynamics {
 pub struct Motor {
   pub kt: f64,
   pub kw: f64,
-  pub k0: f64,
 }
 
 impl Motor {
   pub fn from_coeffs(kt: f64, kw: f64, k0: f64) -> Self {
-    Self { kt, kw, k0 }
+    Self { kt, kw }
   }
 
-  pub fn from_params(v_nom: f64, free_speed: f64, free_torque: f64, stall_torque: f64, stiction_voltage: f64) -> Self {
+  pub fn from_params(v_nom: f64, free_speed: f64, free_torque: f64, stall_torque: f64) -> Self {
     Self {
       kt: v_nom / stall_torque,
-      kw: (v_nom - stiction_voltage - ((v_nom / stall_torque) * free_torque)) / (free_speed),
-      k0: stiction_voltage,
+      kw: (v_nom - ((v_nom / stall_torque) * free_torque)) / (free_speed),
     }
   }
 }
 
 impl MotorExtensionTrait for Motor {}
 
-// TODO: Do we need a custom signum with a special case for 0? If so, what's 
-// the epsilon?
-
 impl MotorForwardDynamics for Motor {
   #[inline(always)]
   fn voltage(&self, torque: f64, speed: f64) -> f64 {
-    self.kt * torque + self.kw * speed + self.k0 * speed.signum()
+    self.kt * torque + self.kw * speed
   }
 }
 
 impl MotorInverseDynamics for Motor {
   #[inline(always)]
   fn speed(&self, voltage: f64, torque: f64) -> f64 {
-    // We can't solve directly for w because it's present in both signum and 
-    // with kw. Instead, we'll try a solution for w > 0, and if we find that 
-    // to be contradictory, we'll revert to the other case (w < 0)
-    let speed = (voltage - self.kt * torque - self.k0) / self.kw;
-    if speed >= 0f64 {
-      speed
-    } else {
-      (voltage - self.kt * torque + self.k0) / self.kw
-    }
+    (voltage - self.kt * torque) / self.kw
   }
 
   #[inline(always)]
   fn torque(&self, voltage: f64, speed: f64) -> f64 {
-    (voltage - self.kw * speed - self.k0 * speed.signum()) / self.kt
+    (voltage - self.kw * speed) / self.kt
   }
 }
 
@@ -92,9 +79,9 @@ impl<T> CurrentAwareMotor<T> {
 }
 
 impl CurrentAwareMotor<Motor> {
-  pub fn from_params(v_nom: f64, free_speed: f64, free_current: f64, stall_torque: f64, stall_current: f64, stiction_voltage: f64) -> Self {
+  pub fn from_params(v_nom: f64, free_speed: f64, free_current: f64, stall_torque: f64, stall_current: f64) -> Self {
     let ki = stall_current / stall_torque;
-    let motor = Motor::from_params(v_nom, free_speed, free_current / ki, stall_torque, stiction_voltage);
+    let motor = Motor::from_params(v_nom, free_speed, free_current / ki, stall_torque);
     CurrentAwareMotor::new(motor, ki)
   }
 }
@@ -222,8 +209,6 @@ impl<T: MotorCurrentDynamics> MotorCurrentDynamics for MultiMotor<T> {
   }
 }
 
-#[allow(non_upper_case_globals)]
-// pub const Falcon500: CurrentAwareMotor<Motor> = CurrentAwareMotor::from_params(12.0, 6380.0, 1.5, 4.69, 257.0, 0.0);
 pub mod from_dyno {
   macro_rules! define_motor {
     ($name:ident, $($args:expr),*) => {
@@ -232,15 +217,15 @@ pub mod from_dyno {
     };
   }
 
-  define_motor!(Falcon500,    12.0, 6380,   1.5,  4.69, 257,  0.0);
-  define_motor!(NEO,          12.0, 5880,   1.3,  3.36, 166,  0.0);
-  define_motor!(NEO550,       12.0, 11710,  1.1,  1.08, 111,  0.0);
-  define_motor!(CIM,          12.0, 5330,   2.7,  2.41, 131,  0.0);
-  define_motor!(MiniCIM,      12.0, 5840,   3,    1.41, 89,   0.0);
-  define_motor!(BAG,          12.0, 13180,  1.8,  0.43, 53,   0.0);
-  define_motor!(vex775pro,    12.0, 18730,  0.7,  0.71, 134,  0.0);
-  define_motor!(KrakenTrap,   12.0, 6000,   2,    7.09, 366,  0.0);
-  define_motor!(KrakenFOC,    12.0, 5800,   2,    9.37, 483,  0.0);
+  define_motor!(Falcon500,    12.0, 6380,   1.5,  4.69, 257);
+  define_motor!(NEO,          12.0, 5880,   1.3,  3.36, 166);
+  define_motor!(NEO550,       12.0, 11710,  1.1,  1.08, 111);
+  define_motor!(CIM,          12.0, 5330,   2.7,  2.41, 131);
+  define_motor!(MiniCIM,      12.0, 5840,   3,    1.41, 89);
+  define_motor!(BAG,          12.0, 13180,  1.8,  0.43, 53);
+  define_motor!(vex775pro,    12.0, 18730,  0.7,  0.71, 134);
+  define_motor!(KrakenTrap,   12.0, 6000,   2,    7.09, 366);
+  define_motor!(KrakenFOC,    12.0, 5800,   2,    9.37, 483);
 }
 
 #[cfg(test)]
