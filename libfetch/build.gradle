@@ -58,47 +58,32 @@ def rust_triple(targetPlatform) {
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
-def sets = ["hal_shared", "wpiutil_shared", "ni_link_libraries", "ntcore_shared"]
+// def sets = ["ntcore_shared"]
+def sets = [
+  "robot-rs-ntcore-sys": ["ntcore_shared"],
+  "robot-rs-wpilib-sys": ["hal_shared", "wpiutil_shared", "ni_link_libraries"]
+]
 
 task updateRustLibs() {
   doLast {
-    sets.forEach { setName -> {
-      nativeUtils.nativeDependencyContainer.getByName(setName, libset -> {
-        def debugBuildType = nativeUtils.buildTypes.named('debug').get()
-        def releaseBuildType = nativeUtils.buildTypes.named('release').get()
-        for (targetPlatform in nativeUtils.platforms) {
-          def resolved = libset.resolveNativeDependency(targetPlatform, releaseBuildType, java.util.Optional.empty()).get()
-          def resolvedDebug = libset.resolveNativeDependency(targetPlatform, debugBuildType, java.util.Optional.empty()).get()
+    sets.each { set -> {
+      set.value.forEach { depName -> {
+        nativeUtils.nativeDependencyContainer.getByName(depName, libset -> {
+          def debugBuildType = nativeUtils.buildTypes.named('debug').get()
+          def releaseBuildType = nativeUtils.buildTypes.named('release').get()
+          for (targetPlatform in nativeUtils.platforms) {
+            def resolved = libset.resolveNativeDependency(targetPlatform, releaseBuildType, java.util.Optional.empty()).get()
+            def resolvedDebug = libset.resolveNativeDependency(targetPlatform, debugBuildType, java.util.Optional.empty()).get()
 
-          def headers = []
-          def libs = []
+            def headers = []
+            def libs = []
 
-          resolved.getLinkFiles().forEach({ f -> libs += f })
-          resolvedDebug.getLinkFiles().forEach({ f -> libs += f })
-          resolved.getIncludeRoots().forEach({ f -> headers += f })
+            resolved.getLinkFiles().forEach({ f -> libs += f })
+            resolvedDebug.getLinkFiles().forEach({ f -> libs += f })
+            resolved.getIncludeRoots().forEach({ f -> headers += f })
 
-          def triple = rust_triple(targetPlatform)
-          def outdir = project.file("../vendor/${triple}")
-          new File(outdir, "libs").mkdirs()
-          new File(outdir, "headers").mkdirs()
-
-          libs.forEach({ lf ->
-            copy {
-              from lf
-              into "${outdir}/libs"
-            }
-          })
-
-          headers.forEach({ hd ->
-            copy {
-              from hd
-              into "${outdir}/headers"
-            }
-          })
-
-          if (targetPlatform.name == "osxuniversal") {
-            // 2nd copy needed for arm
-            outdir = project.file("grapplefrcdriver/buildlibs/aarch64-apple-darwin")
+            def triple = rust_triple(targetPlatform)
+            def outdir = project.file("../${set.key}/vendor/${triple}")
             new File(outdir, "libs").mkdirs()
             new File(outdir, "headers").mkdirs()
 
@@ -115,10 +100,32 @@ task updateRustLibs() {
                 into "${outdir}/headers"
               }
             })
+
+            if (targetPlatform.name == "osxuniversal") {
+              // 2nd copy needed for arm
+              outdir = project.file("grapplefrcdriver/buildlibs/aarch64-apple-darwin")
+              new File(outdir, "libs").mkdirs()
+              new File(outdir, "headers").mkdirs()
+
+              libs.forEach({ lf ->
+                copy {
+                  from lf
+                  into "${outdir}/libs"
+                }
+              })
+
+              headers.forEach({ hd ->
+                copy {
+                  from hd
+                  into "${outdir}/headers"
+                }
+              })
+            }
           }
-        }
-      })
-    }}
+        })
+      }}
+      }
+    }
   }
 }
 

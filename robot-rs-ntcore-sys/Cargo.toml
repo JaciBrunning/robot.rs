@@ -1,0 +1,23 @@
+[package]
+name = "robot-rs-ntcore-sys"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+exclude = ["libfetch"]
+include = [
+    "src/**/*",
+    "Cargo.toml",
+    "build.rs",
+    "WPILIB_LICENSE",
+    "HALWrapper.h",
+    "vendor/**/*",]
+
+[package.metadata.robot_rs]
+vendor_dir = ["vendor/"]
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.69.1"

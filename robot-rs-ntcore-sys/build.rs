@@ -1,6 +1,6 @@
 extern crate bindgen;
 
-const SYMBOL_REGEX: &str = r"(HAL_)\w+";
+const SYMBOL_REGEX: &str = r"(NT_)\w+";
 
 use std::{env, path::PathBuf};
 
@@ -12,12 +12,10 @@ fn main() {
   let profile = std::env::var("PROFILE").unwrap();
   match profile.as_str() {
       "debug" => {
-        println!("cargo:rustc-link-lib=wpiHald");
-        println!("cargo:rustc-link-lib=wpiutild");
+        println!("cargo:rustc-link-lib=ntcored");
       },
       _ => {
-        println!("cargo:rustc-link-lib=wpiHal");
-        println!("cargo:rustc-link-lib=wpiutil");
+        println!("cargo:rustc-link-lib=ntcore");
       },
   }
   println!("cargo:rerun-if-changed=HALWrapper.h");
