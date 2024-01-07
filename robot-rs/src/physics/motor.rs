@@ -1,3 +1,5 @@
+use crate::traits::Wrapper;
+
 pub trait MotorExtensionTrait : Sized {
   fn current_aware(self, ki: f64) -> CurrentAwareMotor<Self> {
     CurrentAwareMotor::new(self, ki)
@@ -33,7 +35,7 @@ pub struct Motor {
 }
 
 impl Motor {
-  pub fn from_coeffs(kt: f64, kw: f64, k0: f64) -> Self {
+  pub fn from_coeffs(kt: f64, kw: f64) -> Self {
     Self { kt, kw }
   }
 
@@ -88,6 +90,12 @@ impl CurrentAwareMotor<Motor> {
 
 impl<T> MotorExtensionTrait for CurrentAwareMotor<T> {}
 
+impl<T> Wrapper<T> for CurrentAwareMotor<T> {
+  fn eject(self) -> T {
+    self.motor
+  }
+}
+
 impl<T: MotorForwardDynamics> MotorForwardDynamics for CurrentAwareMotor<T> {
   #[inline(always)]
   fn voltage(&self, torque: f64, speed: f64) -> f64 {
@@ -133,6 +141,12 @@ impl<T> GearedMotor<T> {
 
 impl<T> MotorExtensionTrait for GearedMotor<T> {}
 
+impl<T> Wrapper<T> for GearedMotor<T> {
+  fn eject(self) -> T {
+    self.motor
+  }
+}
+
 impl<T: MotorForwardDynamics> MotorForwardDynamics for GearedMotor<T> {
   #[inline(always)]
   fn voltage(&self, torque: f64, speed: f64) -> f64 {
@@ -177,6 +191,12 @@ impl<T> MultiMotor<T> {
 }
 
 impl<T> MotorExtensionTrait for MultiMotor<T> {}
+
+impl<T> Wrapper<T> for MultiMotor<T> {
+  fn eject(self) -> T {
+    self.motor
+  }
+}
 
 impl<T: MotorForwardDynamics> MotorForwardDynamics for MultiMotor<T> {
   #[inline(always)]
@@ -237,7 +257,7 @@ mod test {
 
   #[test]
   fn test_geared_motor() {
-    let motor = GearedMotor::new(Motor::from_coeffs(1.23, 2.3, 4.7), 10.0);
+    let motor = GearedMotor::new(Motor::from_coeffs(1.23, 2.3), 10.0);
     assert_relative_eq!(motor.voltage(motor.torque(12.0, 4.5), 4.5), 12.0, epsilon = 0.0001);
     assert_relative_eq!(motor.voltage(1.73, motor.speed(12.0, 1.73)), 12.0, epsilon = 0.0001);
 
@@ -254,7 +274,7 @@ mod test {
 
   #[test]
   fn test_multi_motor() {
-    let motor = MultiMotor::new(Motor::from_coeffs(1.23, 2.3, 4.7), 2);
+    let motor = MultiMotor::new(Motor::from_coeffs(1.23, 2.3), 2);
     assert_relative_eq!(motor.voltage(motor.torque(12.0, 4.5), 4.5), 12.0, epsilon = 0.0001);
     assert_relative_eq!(motor.voltage(1.73, motor.speed(12.0, 1.73)), 12.0, epsilon = 0.0001);
 

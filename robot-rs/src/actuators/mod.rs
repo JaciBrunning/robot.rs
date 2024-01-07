@@ -2,26 +2,27 @@ use crate::traits::Wrapper;
 
 pub trait VoltageController {
   fn set_voltage(&mut self, voltage: f64);
-  fn get_set_voltage(&mut self) -> f64;
+  fn get_set_voltage(&self) -> f64;
 }
 
-pub trait VoltageControllerTraits : Sized + VoltageController {
-  fn invert(self) -> InvertedVoltageController<Self>;
-  fn clamp(self, min_voltage: f64, max_voltage: f64) -> ClampedVoltageController<Self>;
-}
-
-impl<T: VoltageController> VoltageControllerTraits for T {
-  fn invert(self) -> InvertedVoltageController<Self> {
-    InvertedVoltageController::from(self)
+impl<'a, T: VoltageController> VoltageController for &'a mut T {
+  fn set_voltage(&mut self, voltage: f64) {
+    (**self).set_voltage(voltage)
   }
 
-  fn clamp(self, min_voltage: f64, max_voltage: f64) -> ClampedVoltageController<Self> {
-    ClampedVoltageController::new(self, min_voltage, max_voltage)
+  fn get_set_voltage(&self) -> f64 {
+    (**self).get_set_voltage()
   }
 }
 
 pub trait HasBusVoltage {
   fn get_bus_voltage(&self) -> f64;
+}
+
+impl<'a, T: HasBusVoltage> HasBusVoltage for &'a T {
+  fn get_bus_voltage(&self) -> f64 {
+    (**self).get_bus_voltage()
+  }
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +45,7 @@ impl<T: VoltageController> VoltageController for InvertedVoltageController<T> {
   }
 
   #[inline(always)]
-  fn get_set_voltage(&mut self) -> f64 {
+  fn get_set_voltage(&self) -> f64 {
     -self.0.get_set_voltage()
   }
 }
@@ -82,7 +83,7 @@ impl<T: VoltageController> VoltageController for ClampedVoltageController<T> {
   }
 
   #[inline(always)]
-  fn get_set_voltage(&mut self) -> f64 {
+  fn get_set_voltage(&self) -> f64 {
     self.controller.get_set_voltage()
   }
 }
@@ -91,5 +92,20 @@ impl<T: VoltageController + HasBusVoltage> HasBusVoltage for ClampedVoltageContr
   #[inline(always)]
   fn get_bus_voltage(&self) -> f64 {
     self.controller.get_bus_voltage()
+  }
+}
+
+pub trait VoltageControllerExt : Sized + VoltageController {
+  fn invert(self) -> InvertedVoltageController<Self>;
+  fn clamp(self, min_voltage: f64, max_voltage: f64) -> ClampedVoltageController<Self>;
+}
+
+impl<T: VoltageController> VoltageControllerExt for T {
+  fn invert(self) -> InvertedVoltageController<Self> {
+    InvertedVoltageController::from(self)
+  }
+
+  fn clamp(self, min_voltage: f64, max_voltage: f64) -> ClampedVoltageController<Self> {
+    ClampedVoltageController::new(self, min_voltage, max_voltage)
   }
 }

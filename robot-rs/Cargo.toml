@@ -9,4 +9,6 @@ default = ["hal"]
 
 [dependencies]
 approx = "0.5.1"
+num-traits = "0.2.17"
 robot-rs-wpilib-sys = { path = "../robot-rs-wpilib-sys", optional = true }
+uom = "0.35.0"
