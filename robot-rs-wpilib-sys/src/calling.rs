@@ -23,7 +23,7 @@ pub type WpiHalResult<T> = Result<T, WpiHalError>;
 #[macro_export]
 macro_rules! hal_safe_call {
   ($function:ident($($arg:expr),* $(,)?)) => {{
-    use wpilib_hal::calling::WpiHalError;
+    use robot_rs_wpilib_sys::calling::WpiHalError;
     unsafe {
       let mut status = 0;
       let result = $function($($arg,)* &mut status as *mut i32);

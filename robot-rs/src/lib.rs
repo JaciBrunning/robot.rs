@@ -5,12 +5,13 @@ pub mod actuators;
 pub mod physics;
 pub mod sensors;
 
+pub mod time;
 pub mod traits;
 
 pub mod units {
   use std::marker::PhantomData;
 
-use uom::{Kind, typenum::{Z0, N1}};
+  use uom::{Kind, typenum::{Z0, N1}};
   pub use uom::si::*;
   pub use uom::si::f64::*;
 

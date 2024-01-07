@@ -5,7 +5,7 @@ edition = "2021"
 
 [features]
 hal = ["dep:robot-rs-wpilib-sys"]
-default = ["hal"]
+# default = ["hal"]
 
 [dependencies]
 approx = "0.5.1"
