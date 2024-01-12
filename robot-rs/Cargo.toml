@@ -13,7 +13,7 @@ futures = "0.3.30"
 num-traits = "0.2.17"
 robot-rs-wpilib-sys = { path = "../robot-rs-wpilib-sys", optional = true }
 robot-rs-macros = { path = "../robot-rs-macros" }
-tokio = { version = "1.35.1", features = ["sync", "macros", "rt"] }
+tokio = { version = "1.35.1", features = ["sync", "macros", "rt", "time"] }
 uom = "0.35.0"
 async-trait = "0.1.77"
 log = "0.4.20"

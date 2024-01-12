@@ -21,6 +21,7 @@ macro_rules! sensor_alias {
   }
 }
 
+sensor_alias!(BinarySensor, bool, get_state);
 sensor_alias!(Encoder, EncoderTicks, get_ticks);
 sensor_alias!(VelocityEncoder, EncoderTickVelocity, get_tick_velocity);
 sensor_alias!(AngularSensor, Angle, get_angle);
