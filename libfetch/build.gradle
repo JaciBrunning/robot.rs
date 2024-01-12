@@ -60,7 +60,7 @@ import java.nio.file.StandardCopyOption;
 
 // def sets = ["ntcore_shared"]
 def sets = [
-  "robot-rs-ntcore-sys": ["ntcore_shared"],
+  "robot-rs-ntcore-sys": ["ntcore_shared", "wpiutil_shared", "wpinet_shared"],
   "robot-rs-wpilib-sys": ["hal_shared", "wpiutil_shared", "ni_link_libraries"]
 ]
 

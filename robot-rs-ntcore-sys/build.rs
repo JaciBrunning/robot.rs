@@ -13,9 +13,13 @@ fn main() {
   match profile.as_str() {
       "debug" => {
         println!("cargo:rustc-link-lib=ntcored");
+        println!("cargo:rustc-link-lib=wpiutild");
+        println!("cargo:rustc-link-lib=wpinetd");
       },
       _ => {
         println!("cargo:rustc-link-lib=ntcore");
+        println!("cargo:rustc-link-lib=wpiutil");
+        println!("cargo:rustc-link-lib=wpinet");
       },
   }
   println!("cargo:rerun-if-changed=HALWrapper.h");

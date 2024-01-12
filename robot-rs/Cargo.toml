@@ -5,7 +5,8 @@ edition = "2021"
 
 [features]
 hal = ["dep:robot-rs-wpilib-sys"]
-default = ["hal"]
+ntcore = ["dep:ntcore-rs"]
+default = ["hal", "ntcore"]
 
 [dependencies]
 approx = "0.5.1"
@@ -13,6 +14,7 @@ futures = "0.3.30"
 num-traits = "0.2.17"
 robot-rs-wpilib-sys = { path = "../robot-rs-wpilib-sys", optional = true }
 robot-rs-macros = { path = "../robot-rs-macros" }
+ntcore-rs = { path = "../ntcore-rs", optional = true }
 tokio = { version = "1.35.1", features = ["sync", "macros", "rt", "time"] }
 uom = "0.35.0"
 async-trait = "0.1.77"

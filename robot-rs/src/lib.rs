@@ -1,11 +1,15 @@
 #[cfg(feature = "hal")]
 pub use robot_rs_wpilib_sys as hal;
 
+#[cfg(feature = "ntcore")]
+pub use ntcore_rs as ntcore;
+
 pub use robot_rs_macros as macros;
 
 pub mod actuators;
 pub mod activity;
 pub mod filters;
+pub mod input;
 pub mod physics;
 pub mod sensors;
 
