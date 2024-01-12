@@ -8,6 +8,8 @@ pub mod activity;
 pub mod physics;
 pub mod sensors;
 
+pub mod ds;
+pub mod start;
 pub mod time;
 pub mod traits;
 

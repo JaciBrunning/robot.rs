@@ -16,6 +16,8 @@ robot-rs-macros = { path = "../robot-rs-macros" }
 tokio = { version = "1.35.1", features = ["sync", "macros"] }
 uom = "0.35.0"
 async-trait = "0.1.77"
+log = "0.4.20"
+env_logger = "0.10.1"
 
 [build-dependencies]
 robot-rs-build-utils = { path = "../robot-rs-build-utils" }
