@@ -1,9 +1,8 @@
-use std::{sync::{atomic::AtomicBool, Arc}, time::Duration};
+use std::time::Duration;
 
-use futures::{future::{join_all, join}, FutureExt};
 use mockall::{automock, Sequence};
 use robot_rs::{activity::{Systems, Priority}, perform, pinbox};
-use tokio::sync::{oneshot, mpsc};
+use tokio::sync::mpsc;
 use futures::join;
 
 pub struct DropNotifier<F: FnOnce()> {
@@ -102,7 +101,7 @@ async fn test_always_pass() {
   an2.expect_drop().never();
 
   let (tx1, rx1) = mpsc::channel(1);
-  let (tx2, rx2) = mpsc::channel(1);
+  let (_tx2, rx2) = mpsc::channel(1);
   let mut dt = Drivetrain((an1, rx1), (an2, rx2));
   tokio::task::spawn(async move { dt.task_1().await });
 

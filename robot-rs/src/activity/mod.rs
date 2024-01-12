@@ -2,7 +2,6 @@ use std::{sync::Arc, pin::Pin};
 
 use futures::Future;
 pub use robot_rs_macros::Systems;
-use robot_rs_macros::impl_perform_for_tuple;
 use tokio::sync::{oneshot, Mutex};
 
 #[macro_export]

@@ -4,7 +4,7 @@ use crate::nt_internal::{NT_Topic, NT_GetTopic, NT_GetTopicType, NT_GetTopicType
 
 use crate::{instance::NetworkTableInstance, types::Type};
 
-struct Topic {
+pub struct Topic {
   handle: NT_Topic
 }
 
