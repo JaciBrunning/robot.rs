@@ -72,3 +72,10 @@ pub fn copy_deps(libraries: Vec<PathBuf>) -> Result<(), Box<dyn Error>> {
 
   Ok(())
 }
+
+pub fn define_environment(target: &str) {
+  match target {
+    "arm-unknown-linux-gnueabi" | "armv7-unknown-linux-gnueabi" => println!("cargo:rustc-cfg=native"),
+    _ => println!("cargo:rustc-cfg=simulation")
+  }
+}

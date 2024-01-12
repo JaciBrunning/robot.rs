@@ -32,3 +32,34 @@ pub mod units {
   pub type EncoderTickVelocity = Quantity<uom::si::ISQ<Z0, Z0, N1, Z0, Z0, Z0, Z0, dyn EncoderTickKind>, uom::si::SI<f64>, f64>;
   pub const ENCODER_TICKS_PER_SECOND: EncoderTickVelocity = EncoderTickVelocity { dimension: PhantomData, units: PhantomData, value: 1.0 };
 }
+
+pub enum RuntimeType {
+  Native,
+  Simulation
+}
+
+#[cfg(native)]
+#[macro_export]
+macro_rules! runtime_type {
+  () => { RuntimeType::Native };
+}
+
+#[cfg(native)]
+#[macro_export]
+macro_rules! with_runtime {
+  (native $b:block) => { $b };
+  (simulation $b:block) => {};
+}
+
+#[cfg(simulation)]
+#[macro_export]
+macro_rules! runtime_type {
+    () => { RuntimeType::Simulation };
+}
+
+#[cfg(simulation)]
+#[macro_export]
+macro_rules! with_runtime {
+  (native $b:block) => {};
+  (simulation $b:block) => { $b };
+}

@@ -1,3 +1,6 @@
+#[cfg(feature = "hal")]
+pub mod pwm;
+
 use crate::traits::Wrapper;
 
 pub trait VoltageController {
