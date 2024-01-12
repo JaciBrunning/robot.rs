@@ -101,7 +101,7 @@ pub fn impl_perform_for_tuple(_item: TokenStream) -> TokenStream {
       }
 
       #[async_trait::async_trait]
-      impl<#(#types: Send),*> #trait_ident for (#(Arc<System<#types>>,)*) {
+      impl<#(#types: Send + 'static),*> #trait_ident for (#(Arc<System<#types>>,)*) {
         #(type #types = #types;)*
         
         async fn perform<O: Send, F>(self, priority: Priority, f: F) -> Option<O>
@@ -123,7 +123,9 @@ pub fn impl_perform_for_tuple(_item: TokenStream) -> TokenStream {
           tokio::select! {
             ret = future => {
               // Reset the storage to be owned
-              #(*self.#is.storage.lock().await = MaybeReferred::Owned(vals.#is);)*
+              tokio::join!(
+                #(self.#is.on_activity_finished(vals.#is)),*
+              );
               Some(ret)
             },
             #(#select_arms),*

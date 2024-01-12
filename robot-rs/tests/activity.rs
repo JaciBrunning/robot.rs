@@ -74,6 +74,11 @@ struct MySystems<A: ActivityNotifier, B: ActivityNotifier> {
   elevator: Elevator<B>
 }
 
+#[derive(Systems)]
+struct SingleSystem<A: ActivityNotifier> {
+  drivetrain: Drivetrain<A>,
+}
+
 #[tokio::test]
 async fn test_always_pass() {
   let mut an1 = MockActivityNotifier::new();
@@ -211,5 +216,35 @@ async fn double_system() {
   dt_channels.1.0.send(()).await.unwrap();
   tokio::time::sleep(Duration::from_millis(10)).await;
   el_channels.1.0.send(()).await.unwrap();
+  tokio::time::sleep(Duration::from_millis(10)).await;
+}
+
+#[tokio::test]
+async fn idle_task() {
+  let dt_channels = (mpsc::channel(1), mpsc::channel(1));
+  
+  let mut dt = Drivetrain(( MockActivityNotifier::new(), dt_channels.0.1 ), (MockActivityNotifier::new(), dt_channels.1.1));
+
+  let mut seq = Sequence::new();
+  dt.0.0.expect_start().once().in_sequence(&mut seq).return_const(());
+  dt.0.0.expect_stop().once().in_sequence(&mut seq).return_const(());
+  dt.0.0.expect_drop().once().in_sequence(&mut seq).return_const(());
+
+  dt.1.0.expect_start().once().in_sequence(&mut seq).return_const(());
+  dt.1.0.expect_drop().once().in_sequence(&mut seq).return_const(());
+
+  dt.0.0.expect_start().once().in_sequence(&mut seq).return_const(());
+  dt.0.0.expect_drop().once().in_sequence(&mut seq).return_const(());
+
+  let systems = SingleSystem { drivetrain: dt }.shared();
+
+  systems.drivetrain.set_idle_activity(pinbox!(Drivetrain::task_2));
+  perform!(systems.drivetrain, Priority(1), pinbox!(Drivetrain::task_1));
+  tokio::time::sleep(Duration::from_millis(10)).await;
+
+  dt_channels.0.0.send(()).await.unwrap();
+  tokio::time::sleep(Duration::from_millis(10)).await;
+
+  perform!(systems.drivetrain, Priority(1), pinbox!(Drivetrain::task_1));
   tokio::time::sleep(Duration::from_millis(10)).await;
 }

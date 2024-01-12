@@ -1,4 +1,4 @@
-use std::{sync::Arc, pin::Pin};
+use std::{sync::Arc, pin::Pin, time::Duration};
 
 use futures::Future;
 pub use robot_rs_macros::Systems;
@@ -53,15 +53,49 @@ impl<T> MaybeReferred<T> {
 }
 
 pub struct System<T> {
-  storage: Mutex<MaybeReferred<T>>
+  storage: Mutex<MaybeReferred<T>>,
+  // Use a standard rwlock since we don't access it often, and std is faster than async.
+  default_activity_factory: Arc<std::sync::RwLock<Option<Arc<dyn Fn(&mut T) -> Pin<Box<dyn Future<Output = ()> + '_ + Send>> + Send + Sync>>>>
 }
 
 impl<T> System<T> {
   pub fn new(system: T) -> Self {
-    Self { storage: Mutex::new(MaybeReferred::Owned(system)) }
+    Self { storage: Mutex::new(MaybeReferred::Owned(system)), default_activity_factory: Arc::new(std::sync::RwLock::new(None)) }
   }
 
-  // pub async fn perform<O, Fut: Future<Output = O>, F: FnOnce(&mut T) -> Fut>(&self, priority: Priority, f: F) -> Option<O> {
+  pub fn set_idle_activity<F: Fn(&mut T) -> Pin<Box<dyn Future<Output = ()> + '_ + Send>> + Send + Sync + 'static>(&self, f: F) {
+    *self.default_activity_factory.write().unwrap() = Some(Arc::new(f));
+  }
+
+  pub async fn on_activity_finished(self: Arc<Self>, mut sys: T) {
+    let factory = {
+      self.default_activity_factory.read().unwrap().clone()
+    };
+    match factory {
+      Some(factory) => {
+        let (tx, rx) = oneshot::channel();
+        *self.storage.lock().await = MaybeReferred::Referred(Priority(0), tx);
+
+        let future = async {
+          loop {
+            factory(&mut sys).await;
+            tokio::time::sleep(Duration::from_millis(1)).await;  // Just in case the above exits immediately
+          }
+        };
+        
+        tokio::select! {
+          _ = future => panic!("A future that can never finish has finished!"),
+          new_sender = rx => {
+            new_sender.unwrap().send(sys).ok();
+          }
+        }
+      },
+      None => {
+        *self.storage.lock().await = MaybeReferred::Owned(sys);
+      }
+    }
+  }
+
   pub async fn perform<O, F>(self: Arc<Self>, priority: Priority, f: F) -> Option<O>
     where F: FnOnce(&mut T) -> Pin<Box<dyn Future<Output = O> + '_ + Send>>
   {
@@ -76,8 +110,7 @@ impl<T> System<T> {
 
       tokio::select! {
         ret = future => {
-          // Reset the storage to be owned
-          *self.storage.lock().await = MaybeReferred::Owned(sys);
+          self.on_activity_finished(sys).await;
           Some(ret)
         },
         new_sender = rx_take => {
