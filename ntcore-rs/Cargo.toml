@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 robot-rs-ntcore-sys = { path = "../robot-rs-ntcore-sys" }
+
+[build-dependencies]
+robot-rs-build-utils = { path = "../robot-rs-build-utils" }
