@@ -1,4 +1,4 @@
-use std::{ops::{Neg, Sub, Div}, f64::consts::PI, cell::{Cell, RefCell}};
+use std::{ops::{Neg, Sub, Div}, f64::consts::PI, cell::RefCell};
 
 use crate::{units::*, traits::Wrapper};
 

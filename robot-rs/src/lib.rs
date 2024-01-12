@@ -1,7 +1,10 @@
 #[cfg(feature = "hal")]
 pub use robot_rs_wpilib_sys as hal;
 
+pub use robot_rs_macros as macros;
+
 pub mod actuators;
+pub mod activity;
 pub mod physics;
 pub mod sensors;
 

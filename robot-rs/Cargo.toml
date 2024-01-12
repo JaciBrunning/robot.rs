@@ -9,9 +9,17 @@ default = ["hal"]
 
 [dependencies]
 approx = "0.5.1"
+futures = "0.3.30"
 num-traits = "0.2.17"
 robot-rs-wpilib-sys = { path = "../robot-rs-wpilib-sys", optional = true }
+robot-rs-macros = { path = "../robot-rs-macros" }
+tokio = { version = "1.35.1", features = ["sync", "macros"] }
 uom = "0.35.0"
+async-trait = "0.1.77"
 
 [build-dependencies]
 robot-rs-build-utils = { path = "../robot-rs-build-utils" }
+
+[dev-dependencies]
+mockall = "0.12.1"
+tokio = { version = "1.35.1", features = ["full"] }
