@@ -77,20 +77,31 @@ task updateRustLibs() {
 
             def headers = []
             def libs = []
+            def runtime = []
 
             resolved.getLinkFiles().forEach({ f -> libs += f })
             resolvedDebug.getLinkFiles().forEach({ f -> libs += f })
+            resolved.getRuntimeFiles().forEach({ f -> runtime += f })
+            resolvedDebug.getRuntimeFiles().forEach({ f -> runtime += f })
             resolved.getIncludeRoots().forEach({ f -> headers += f })
 
             def triple = rust_triple(targetPlatform)
             def outdir = project.file("../${set.key}/vendor/${triple}")
             new File(outdir, "libs").mkdirs()
+            new File(outdir, "runtime-libs").mkdirs()
             new File(outdir, "headers").mkdirs()
 
             libs.forEach({ lf ->
               copy {
                 from lf
                 into "${outdir}/libs"
+              }
+            })
+
+            runtime.forEach({ lf ->
+              copy {
+                from lf
+                into "${outdir}/runtime-libs"
               }
             })
 

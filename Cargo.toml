@@ -4,6 +4,7 @@ members = [
   # "robot_rs",
   "robot-rs",
   "ntcore-rs",
+  "robot-rs-build-utils",
   "robot-rs-ntcore-sys",
   "robot-rs-wpilib-sys",
 ]
