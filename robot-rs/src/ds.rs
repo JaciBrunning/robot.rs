@@ -47,6 +47,26 @@ impl RobotControlState {
   }
 }
 
+#[cfg(feature = "hal")]
+pub mod observe {
+  use robot_rs_wpilib_sys::{HAL_ObserveUserProgramStarting, HAL_ObserveUserProgramTest, HAL_ObserveUserProgramTeleop, HAL_ObserveUserProgramAutonomous, HAL_ObserveUserProgramDisabled};
+
+  pub fn start() { unsafe { HAL_ObserveUserProgramStarting() } }
+  pub fn disabled() { unsafe { HAL_ObserveUserProgramDisabled() } }
+  pub fn autonomous() { unsafe { HAL_ObserveUserProgramAutonomous() } }
+  pub fn teleop() { unsafe { HAL_ObserveUserProgramTeleop() } }
+  pub fn test() { unsafe { HAL_ObserveUserProgramTest() } }
+}
+
+#[cfg(not(feature = "hal"))]
+pub mod observe {
+  pub fn start() {}
+  pub fn disabled() {}
+  pub fn autonomous() {}
+  pub fn teleop() {}
+  pub fn test() {}
+}
+
 #[macro_export]
 macro_rules! robot_init {
   (

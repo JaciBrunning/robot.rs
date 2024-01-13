@@ -118,8 +118,27 @@ impl DeployCommand {
     }
 
     // Deploy our program
+    session.run(". /etc/profile.d/natinst-path.sh; /usr/local/frc/bin/frcKillRobot.sh -t 2> /dev/null").ok();
+
     session.maybe_copy_file(path_to_artifact, PathBuf::from(format!("/home/lvuser/frcUserProgram")).as_path(), 0o755, false)
       .map_err(|e| Error::new(format!("Could not copy user program")).with_specifics(format!("{}", e)))?;
+    
+    session.run("chmod +x /home/lvuser/frcUserProgram && chown lvuser /home/lvuser/frcUserProgram")
+      .map_err(|e| Error::new("Could not chmod user program").with_specifics(format!("{}", e)))?;
+    session.run("setcap cap_sys_nice+eip /home/lvuser/frcUserProgram")
+      .map_err(|e| Error::new("Could not set CAP_SYS_NICE").with_specifics(format!("{}", e)))?;
+
+    let robot_command = "/home/lvuser/frcUserProgram";
+
+    session.run(&format!("echo \"{}\" > /home/lvuser/robotCommand", robot_command))
+      .map_err(|e| Error::new("Could not write robotCommand").with_specifics(format!("{}", e)))?;
+
+    session.run("chmod +x /home/lvuser/robotCommand && chown lvuser /home/lvuser/robotCommand")
+      .map_err(|e| Error::new("Could not chmod robotCommand").with_specifics(format!("{}", e)))?;
+
+    session.run(". /etc/profile.d/natinst-path.sh; /usr/local/frc/bin/frcKillRobot.sh -t -r 2> /dev/null").ok();
+    session.run("ldconfig").ok();
+
     Ok(())
   }
 

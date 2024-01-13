@@ -1,6 +1,7 @@
 use std::{error::Error, sync::{atomic::AtomicBool, Arc}};
 
 use log::{error, warn, info};
+use crate::ds::observe;
 #[cfg(feature = "hal")]
 use crate::hal::{HAL_Initialize, HAL_SetNotifierThreadPriority, hal_safe_call, HAL_HasMain, HAL_Shutdown, HAL_ExitMain, HAL_RunMain};
 
@@ -50,6 +51,8 @@ pub fn init_all<F: FnOnce(Arc<AtomicBool>) -> Result<(), Box<dyn Error>> + Send 
   hal_init();
 
   info!("**** Running Robot ****");
+
+  observe::start();
 
   let running = Arc::new(AtomicBool::new(true));
 
