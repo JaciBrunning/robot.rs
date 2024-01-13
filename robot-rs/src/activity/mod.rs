@@ -5,7 +5,7 @@ pub use robot_rs_macros::Systems;
 use tokio::sync::{oneshot, Mutex};
 
 #[macro_export]
-macro_rules! pinbox {
+macro_rules! activity_factory {
   ($fnpath:expr) => {
     |x| futures::future::FutureExt::boxed(async move { $fnpath(x).await })
   }
@@ -135,11 +135,14 @@ pub mod tup_ext {
 
 #[macro_export]
 macro_rules! perform {
+  ($system:expr, $priority:expr, $func:path) => {
+    perform!($system, $priority, |x| futures::future::FutureExt::boxed(async move { $func(x).await }))
+  };
   ($system:expr, $priority:expr, $func:expr) => {
     {
       use robot_rs::activity::tup_ext::*;
       tokio::task::spawn($system.clone().perform($priority, $func))
     }
-  }
+  };
 }
 

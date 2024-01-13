@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use mockall::{automock, Sequence};
-use robot_rs::{activity::{Systems, Priority}, perform, pinbox};
+use robot_rs::{activity::{Systems, Priority}, perform, activity_factory};
 use tokio::sync::mpsc;
-use futures::join;
+use futures::{join, FutureExt};
 
 pub struct DropNotifier<F: FnOnce()> {
   on_finish: Option<F>
@@ -148,18 +148,18 @@ async fn independent() {
   // let dt_an = ()
   let systems = MySystems { drivetrain: dt, elevator: el }.shared();
 
-  perform!(systems.drivetrain, Priority(1), pinbox!(Drivetrain::task_1));
+  perform!(systems.drivetrain, Priority(1), Drivetrain::task_1);
   tokio::time::sleep(Duration::from_millis(10)).await;
-  perform!(systems.elevator, Priority(1), pinbox!(Elevator::task_1));
+  perform!(systems.elevator, Priority(1), Elevator::task_1);
   tokio::time::sleep(Duration::from_millis(10)).await;
 
   // Stop the drivetrain, but not the elevator
   dt_channels.0.0.send(()).await.unwrap();
   tokio::time::sleep(Duration::from_millis(10)).await;
 
-  perform!(systems.drivetrain, Priority(2), pinbox!(Drivetrain::task_2));
+  perform!(systems.drivetrain, Priority(2), Drivetrain::task_2);
   tokio::time::sleep(Duration::from_millis(10)).await;
-  perform!(systems.elevator, Priority(2), pinbox!(Elevator::task_2));
+  perform!(systems.elevator, Priority(2), Elevator::task_2);
   tokio::time::sleep(Duration::from_millis(10)).await;
 
   dt_channels.1.0.send(()).await.unwrap();
@@ -201,16 +201,16 @@ async fn double_system() {
 
   let systems = MySystems { drivetrain: dt, elevator: el }.shared();
 
-  perform!(systems.drivetrain, Priority(1), pinbox!(Drivetrain::task_1));
+  perform!(systems.drivetrain, Priority(1), Drivetrain::task_1);
   tokio::time::sleep(Duration::from_millis(10)).await;
-  perform!(systems.elevator, Priority(1), pinbox!(Elevator::task_1));
+  perform!(systems.elevator, Priority(1), Elevator::task_1);
   tokio::time::sleep(Duration::from_millis(10)).await;
 
   // Stop the drivetrain, but not the elevator
   dt_channels.0.0.send(()).await.unwrap();
   tokio::time::sleep(Duration::from_millis(10)).await;
 
-  perform!((systems.drivetrain, systems.elevator), Priority(2), pinbox!(uses_both));
+  perform!((systems.drivetrain, systems.elevator), Priority(2), uses_both);
   tokio::time::sleep(Duration::from_millis(10)).await;
   
   dt_channels.1.0.send(()).await.unwrap();
@@ -238,13 +238,13 @@ async fn idle_task() {
 
   let systems = SingleSystem { drivetrain: dt }.shared();
 
-  systems.drivetrain.set_idle_activity(pinbox!(Drivetrain::task_2));
-  perform!(systems.drivetrain, Priority(1), pinbox!(Drivetrain::task_1));
+  systems.drivetrain.set_idle_activity(activity_factory!(Drivetrain::task_2));
+  perform!(systems.drivetrain, Priority(1), Drivetrain::task_1);
   tokio::time::sleep(Duration::from_millis(10)).await;
 
   dt_channels.0.0.send(()).await.unwrap();
   tokio::time::sleep(Duration::from_millis(10)).await;
 
-  perform!(systems.drivetrain, Priority(1), pinbox!(Drivetrain::task_1));
+  perform!(systems.drivetrain, Priority(1), Drivetrain::task_1);
   tokio::time::sleep(Duration::from_millis(10)).await;
 }
