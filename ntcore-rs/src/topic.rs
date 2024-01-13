@@ -1,21 +1,139 @@
 use std::ffi::CString;
+use std::marker::PhantomData;
+use std::mem::size_of;
+
+use robot_rs_ntcore_sys::{NT_Subscriber, NT_Unsubscribe, NT_Subscribe, NT_PubSubOptions, NT_Publish, NT_Unpublish, NT_Publisher, NT_GetEntryEx, NT_GetEntryValue, NT_Value, NT_Entry, NT_SetEntryValue, NT_Inst};
 
 use crate::nt_internal::{NT_Topic, NT_GetTopic, NT_GetTopicType, NT_GetTopicTypeString, NT_SetTopicPersistent, NT_GetTopicPersistent, NT_SetTopicRetained, NT_GetTopicRetained, NT_GetTopicExists};
 
+use crate::types::{Value, NTError, NTResult};
 use crate::{instance::NetworkTableInstance, types::Type};
 
+const DEFAULT_PUBSUB: NT_PubSubOptions = NT_PubSubOptions {
+  structSize: size_of::<NT_PubSubOptions>() as u32,
+  pollStorage: 0,
+  periodic: 0.1,
+  excludePublisher: 0,
+  sendAll: 0,
+  topicsOnly: 0,
+  prefixMatch: 0,
+  keepDuplicates: 0,
+  disableRemote: 0,
+  disableLocal: 0,
+  excludeSelf: 0,
+};
+
+pub trait GenericSubscriber<V: Value> {
+  fn get(&self) -> Option<NTResult<V>>;
+}
+
+pub trait GenericPublisher<V: Value> {
+  fn set(&self, v: V) -> NTResult<()>;
+}
+
+pub struct Subscriber<V: Value> {
+  handle: NT_Subscriber,
+  value_t: PhantomData<V>
+}
+
+impl<V: Value> GenericSubscriber<V> for Subscriber<V> {
+  fn get(&self) -> Option<NTResult<V>> {
+    let mut value = NT_Value::default();
+    unsafe { NT_GetEntryValue(self.handle, &mut value) }
+    match value.type_ {
+      robot_rs_ntcore_sys::NT_Type::NT_UNASSIGNED => None,
+      _ => Some(V::from_nt(value.into()))
+    }
+  }
+}
+
+impl<V: Value> Drop for Subscriber<V> {
+  fn drop(&mut self) {
+    unsafe { NT_Unsubscribe(self.handle) }
+  }
+}
+
+pub struct Publisher<V: Value> {
+  handle: NT_Publisher,
+  value_t: PhantomData<V>
+}
+
+impl<V: Value> GenericPublisher<V> for Publisher<V> {
+  fn set(&self, v: V) -> NTResult<()> {
+    v.to_nt().with_nt_value(|ntval| {
+      if (unsafe { NT_SetEntryValue(self.handle, &ntval) }) == 0 {
+        Err(NTError::TypeMismatch)
+      } else {
+        Ok(())
+      }
+    })
+  }
+}
+
+impl<V: Value> Drop for Publisher<V> {
+  fn drop(&mut self) {
+    unsafe { NT_Unpublish(self.handle) }
+  }
+}
+
+pub struct Entry<V: Value> {
+  handle: NT_Entry,
+  value_t: PhantomData<V>
+}
+
+impl<V: Value> GenericPublisher<V> for Entry<V> {
+  fn set(&self, v: V) -> NTResult<()> {
+    v.to_nt().with_nt_value(|ntval| {
+      if (unsafe { NT_SetEntryValue(self.handle, &ntval) }) == 0 {
+        Err(NTError::TypeMismatch)
+      } else {
+        Ok(())
+      }
+    })
+  }
+}
+
+impl<V: Value> GenericSubscriber<V> for Entry<V> {
+  fn get(&self) -> Option<NTResult<V>> {
+    let mut value = NT_Value::default();
+    unsafe { NT_GetEntryValue(self.handle, &mut value) }
+    match value.type_ {
+      robot_rs_ntcore_sys::NT_Type::NT_UNASSIGNED => None,
+      _ => Some(V::from_nt(value.into()))
+    }
+  }
+}
+
+impl<V: Value> Drop for Entry<V> {
+  fn drop(&mut self) {
+    unsafe { NT_Unpublish(self.handle) }
+  }
+}
+
 pub struct Topic {
-  handle: NT_Topic
+  handle: NT_Topic,
+  name: String,
+  instance_handle: NT_Inst
 }
 
 impl Topic {
   pub fn new(instance: &NetworkTableInstance, name: &str) -> Self {
+    Self::from_inst_handle(instance.handle, name)
+  }
+
+  fn from_inst_handle(handle: NT_Inst, name: &str) -> Self {
     let cstr = CString::new(name).unwrap();
     Self {
+      instance_handle: handle,
       handle: unsafe {
-        NT_GetTopic(instance.handle, cstr.as_ptr(), cstr.as_bytes().len())
-      }
+        NT_GetTopic(handle, cstr.as_ptr(), cstr.as_bytes().len())
+      },
+      name: name.to_owned()
     }
+  }
+
+  pub fn child(&self, name: &str) -> Self {
+    Self::from_inst_handle(self.instance_handle, &(self.name.clone() + "/" + name))
   }
 
   pub fn get_type(&self) -> Type {
@@ -48,5 +166,18 @@ impl Topic {
     unsafe { NT_GetTopicExists(self.handle) != 0 }
   }
 
-  // TODO: Properties, Pub, Sub
+  pub fn subscribe<V: Value>(&self) -> Subscriber<V> {
+    let s = unsafe { NT_Subscribe(self.handle, V::NT_TYPE.into(), V::NT_TYPE_STRING.as_ptr() as *const i8, &DEFAULT_PUBSUB) };
+    Subscriber { handle: s, value_t: PhantomData }
+  }
+
+  pub fn publish<V: Value>(&self) -> Publisher<V> {
+    let p = unsafe { NT_Publish(self.handle, V::NT_TYPE.into(), V::NT_TYPE_STRING.as_ptr() as *const i8, &DEFAULT_PUBSUB) };
+    Publisher { handle: p, value_t: PhantomData }
+  }
+
+  pub fn entry<V: Value>(&self) -> Entry<V> {
+    let e = unsafe { NT_GetEntryEx(self.handle, V::NT_TYPE.into(), V::NT_TYPE_STRING.as_ptr() as *const i8, &DEFAULT_PUBSUB) };
+    Entry { handle: e, value_t: PhantomData }
+  }
 }

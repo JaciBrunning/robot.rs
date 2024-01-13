@@ -1,8 +1,6 @@
 use std::ffi::CString;
 
-use crate::nt_internal::{NT_Inst, NT_GetDefaultInstance, NT_CreateInstance, NT_DestroyInstance, NT_StartServer, NT_StopServer};
-
-use crate::entry::Entry;
+use crate::{nt_internal::{NT_Inst, NT_GetDefaultInstance, NT_CreateInstance, NT_DestroyInstance, NT_StartServer, NT_StopServer}, topic::Topic};
 
 #[derive(Debug, Clone)]
 pub struct ServerConfig<'a> {
@@ -51,10 +49,8 @@ impl NetworkTableInstance {
     unsafe { NT_StopServer(self.handle) }
   }
 
-  // TODO: Client
-
-  pub fn entry(&self, name: &str) -> Entry {
-    Entry::new(&self, name)
+  pub fn topic(&self, name: &str) -> Topic {
+    Topic::new(&self, name)
   }
 }
 

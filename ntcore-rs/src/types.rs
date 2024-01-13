@@ -55,8 +55,28 @@ impl From<NT_Type> for Type {
   }
 }
 
+impl Into<NT_Type> for Type {
+  fn into(self) -> NT_Type {
+    match self {
+      Type::Unassigned => NT_Type::NT_UNASSIGNED,
+      Type::Boolean => NT_Type::NT_BOOLEAN,
+      Type::Double => NT_Type::NT_DOUBLE,
+      Type::String => NT_Type::NT_STRING,
+      Type::Raw => NT_Type::NT_RAW,
+      Type::BooleanArray => NT_Type::NT_BOOLEAN_ARRAY,
+      Type::DoubleArray => NT_Type::NT_DOUBLE_ARRAY,
+      Type::StringArray => NT_Type::NT_STRING_ARRAY,
+      Type::Rpc => NT_Type::NT_RPC,
+      Type::Integer => NT_Type::NT_INTEGER,
+      Type::Float => NT_Type::NT_FLOAT,
+      Type::IntegerArray => NT_Type::NT_INTEGER_ARRAY,
+      Type::FloatArray => NT_Type::NT_FLOAT_ARRAY,
+    }
+  }
+}
+
 #[derive(Debug, Clone)]
-pub enum Value {
+pub enum NTValue {
   Unassigned,
   Boolean(bool),
   Double(f64),
@@ -71,58 +91,46 @@ pub enum Value {
   FloatArray(Vec<f32>)
 }
 
-#[derive(Debug, Clone)]
-pub struct ValueContext {
-  pub data: Value,
-  pub last_change: Option<usize>,
-  pub server_time: usize,
-}
-
-impl From<NT_Value> for ValueContext {
+impl From<NT_Value> for NTValue {
   fn from(value: NT_Value) -> Self {
     let data = match value.type_ {
-      NT_Type::NT_UNASSIGNED => Value::Unassigned,
-      NT_Type::NT_BOOLEAN => Value::Boolean(unsafe { value.data.v_boolean != 0 }),
-      NT_Type::NT_DOUBLE => Value::Double(unsafe { value.data.v_double }),
-      NT_Type::NT_STRING => Value::String({
+      NT_Type::NT_UNASSIGNED => NTValue::Unassigned,
+      NT_Type::NT_BOOLEAN => NTValue::Boolean(unsafe { value.data.v_boolean != 0 }),
+      NT_Type::NT_DOUBLE => NTValue::Double(unsafe { value.data.v_double }),
+      NT_Type::NT_STRING => NTValue::String({
         std::str::from_utf8(unsafe { std::slice::from_raw_parts(value.data.v_string.str_ as *const u8, value.data.v_string.len as usize) }).unwrap().to_owned()
       }),
-      NT_Type::NT_RAW => Value::Raw({
+      NT_Type::NT_RAW => NTValue::Raw({
         unsafe { slice::from_raw_parts(value.data.v_raw.data, value.data.v_raw.size as usize).into() }
       }),
-      NT_Type::NT_BOOLEAN_ARRAY => Value::BooleanArray({
+      NT_Type::NT_BOOLEAN_ARRAY => NTValue::BooleanArray({
         unsafe { slice::from_raw_parts(value.data.arr_boolean.arr, value.data.arr_boolean.size as usize).iter().map(|x| *x != 0).collect() }
       }),
-      NT_Type::NT_DOUBLE_ARRAY => Value::DoubleArray({
+      NT_Type::NT_DOUBLE_ARRAY => NTValue::DoubleArray({
         unsafe { slice::from_raw_parts(value.data.arr_double.arr, value.data.arr_double.size as usize).into() }
       }),
       NT_Type::NT_STRING_ARRAY => {
         let s_arr = unsafe { slice::from_raw_parts(value.data.arr_string.arr, value.data.arr_string.size as usize) };
-        Value::StringArray(s_arr.iter().map(|s| {
+        NTValue::StringArray(s_arr.iter().map(|s| {
           std::str::from_utf8(unsafe { std::slice::from_raw_parts(s.str_ as *const u8, s.len as usize) }).unwrap().to_owned()
         }).collect())
       },
       NT_Type::NT_RPC => panic!("Cannot read an RPC"),
-      NT_Type::NT_INTEGER => Value::Integer(unsafe { value.data.v_int as isize }),
-      NT_Type::NT_FLOAT => Value::Float(unsafe { value.data.v_float }),
-      NT_Type::NT_INTEGER_ARRAY => Value::IntegerArray({
+      NT_Type::NT_INTEGER => NTValue::Integer(unsafe { value.data.v_int as isize }),
+      NT_Type::NT_FLOAT => NTValue::Float(unsafe { value.data.v_float }),
+      NT_Type::NT_INTEGER_ARRAY => NTValue::IntegerArray({
         unsafe { slice::from_raw_parts(value.data.arr_int.arr, value.data.arr_int.size as usize).iter().map(|x| *x as isize).collect() }
       }),
-      NT_Type::NT_FLOAT_ARRAY => Value::FloatArray({
+      NT_Type::NT_FLOAT_ARRAY => NTValue::FloatArray({
         unsafe { slice::from_raw_parts(value.data.arr_float.arr, value.data.arr_float.size as usize).into() }
       }),
     };
 
-    let last_change = match value.last_change {
-      i if i < 0 => None,
-      i => Some(i as usize)
-    };
-
-    ValueContext { data, last_change, server_time: value.server_time as usize }
+    data
   }
 }
 
-impl Value {
+impl NTValue {
   pub fn with_nt_value<T, F: FnOnce(NT_Value) -> T>(&self, f: F) -> T {
     let last_change = unsafe { NT_Now() };
     let server_time = unsafe { NT_Now() };
@@ -132,22 +140,22 @@ impl Value {
     ntv.server_time = server_time;
 
     match self {
-      Value::Unassigned => f(NT_Value { type_: NT_Type::NT_UNASSIGNED, ..ntv }),
-      Value::Boolean(v) => f({ ntv.type_ = NT_Type::NT_BOOLEAN; ntv.data.v_boolean = *v as i32; ntv }),
-      Value::Double(v) => f({ ntv.type_ = NT_Type::NT_DOUBLE; ntv.data.v_double = *v; ntv }),
-      Value::String(v) => {
+      NTValue::Unassigned => f(NT_Value { type_: NT_Type::NT_UNASSIGNED, ..ntv }),
+      NTValue::Boolean(v) => f({ ntv.type_ = NT_Type::NT_BOOLEAN; ntv.data.v_boolean = *v as i32; ntv }),
+      NTValue::Double(v) => f({ ntv.type_ = NT_Type::NT_DOUBLE; ntv.data.v_double = *v; ntv }),
+      NTValue::String(v) => {
         ntv.type_ = NT_Type::NT_STRING;
         ntv.data.v_string.len = v.as_bytes().len();
         ntv.data.v_string.str_ = v.as_ptr() as *mut i8;   // These casts are very unsafe, but we make the assumption that NT doesn't mutate the pointer
         f(ntv)
       },
-      Value::Raw(v) => {
+      NTValue::Raw(v) => {
         ntv.type_ = NT_Type::NT_RAW;
         ntv.data.v_raw.size = v.len();
         ntv.data.v_raw.data = v.as_ptr() as *mut u8;   // These casts are very unsafe, but we make the assumption that NT doesn't mutate the pointer
         f(ntv)
       },
-      Value::BooleanArray(arr) => {
+      NTValue::BooleanArray(arr) => {
         let mut buf = vec![0; arr.len()];
         for i in 0..arr.len() { buf[i] = arr[i] as i32 }
 
@@ -156,13 +164,13 @@ impl Value {
         ntv.data.arr_boolean.arr = buf.as_ptr() as *mut i32;
         f(ntv)
       },
-      Value::DoubleArray(arr) => {
+      NTValue::DoubleArray(arr) => {
         ntv.type_ = NT_Type::NT_DOUBLE_ARRAY;
         ntv.data.arr_double.size = arr.len();
         ntv.data.arr_double.arr = arr.as_ptr() as *mut f64;
         f(ntv)
       },
-      Value::StringArray(arr) => {
+      NTValue::StringArray(arr) => {
         let mut buf = vec![Default::default(); arr.len()];
         for i in 0..arr.len() { buf[i] = NT_String { str_: arr[i].as_ptr() as *mut i8, len: arr[i].len()  } };
 
@@ -171,9 +179,9 @@ impl Value {
         ntv.data.arr_string.arr = buf.as_ptr() as *mut NT_String;
         f(ntv)
       },
-      Value::Integer(v) => f({ ntv.type_ = NT_Type::NT_INTEGER; ntv.data.v_int = *v as i64; ntv }),
-      Value::Float(v) => f({ ntv.type_ = NT_Type::NT_FLOAT; ntv.data.v_float = *v; ntv }),
-      Value::IntegerArray(arr) => {
+      NTValue::Integer(v) => f({ ntv.type_ = NT_Type::NT_INTEGER; ntv.data.v_int = *v as i64; ntv }),
+      NTValue::Float(v) => f({ ntv.type_ = NT_Type::NT_FLOAT; ntv.data.v_float = *v; ntv }),
+      NTValue::IntegerArray(arr) => {
         let mut buf = vec![0; arr.len()];
         for i in 0..arr.len() { buf[i] = arr[i] as i64 }
 
@@ -182,7 +190,7 @@ impl Value {
         ntv.data.arr_int.arr = buf.as_ptr() as *mut i64;
         f(ntv)
       },
-      Value::FloatArray(arr) => {
+      NTValue::FloatArray(arr) => {
         ntv.type_ = NT_Type::NT_FLOAT_ARRAY;
         ntv.data.arr_float.size = arr.len();
         ntv.data.arr_float.arr = arr.as_ptr() as *mut f32;
@@ -192,23 +200,63 @@ impl Value {
   }
 }
 
-macro_rules! value_from {
-  ($variant:ident, $ty:ty) => {
-    impl From<$ty> for Value {
-      fn from(value: $ty) -> Self {
-        Value::$variant(value)
+// macro_rules! value_from {
+//   ($variant:ident, $ty:ty) => {
+//     impl From<$ty> for Value {
+//       fn from(value: $ty) -> Self {
+//         Value::$variant(value)
+//       }
+//     }
+//   }
+// }
+
+// value_from!(Boolean, bool);
+// value_from!(Double, f64);
+// value_from!(String, String);
+// value_from!(BooleanArray, Vec<bool>);
+// value_from!(DoubleArray, Vec<f64>);
+// value_from!(StringArray, Vec<String>);
+// value_from!(Integer, isize);
+// value_from!(Float, f32);
+// value_from!(IntegerArray, Vec<isize>);
+// value_from!(FloatArray, Vec<f32>);
+
+macro_rules! simple_value_from {
+  ($variant:ident, $ty:ty, $nt_type_str:literal) => {
+    impl Value for $ty {
+      const NT_TYPE_STRING: &'static str = $nt_type_str;
+      const NT_TYPE: Type = Type::$variant;
+
+      fn from_nt(val: NTValue) -> NTResult<Self> {
+        match val {
+          NTValue::$variant(v) => Ok(v),
+          _ => Err(NTError::TypeMismatch)
+        }
+      }
+
+      fn to_nt(self) -> NTValue {
+        NTValue::$variant(self)
       }
     }
   }
 }
 
-value_from!(Boolean, bool);
-value_from!(Double, f64);
-value_from!(String, String);
-value_from!(BooleanArray, Vec<bool>);
-value_from!(DoubleArray, Vec<f64>);
-value_from!(StringArray, Vec<String>);
-value_from!(Integer, isize);
-value_from!(Float, f32);
-value_from!(IntegerArray, Vec<isize>);
-value_from!(FloatArray, Vec<f32>);
+pub trait Value : Sized {
+  const NT_TYPE_STRING: &'static str;
+  const NT_TYPE: Type;
+
+  fn from_nt(val: NTValue) -> NTResult<Self>;
+  fn to_nt(self) -> NTValue;
+}
+
+simple_value_from!(Boolean, bool, "boolean");
+simple_value_from!(Float, f32, "float");
+simple_value_from!(Double, f64, "double");
+simple_value_from!(String, String, "string");
+simple_value_from!(Raw, Vec<u8>, "raw");
+simple_value_from!(BooleanArray, Vec<bool>, "boolean[]");
+simple_value_from!(FloatArray, Vec<f32>, "float[]");
+simple_value_from!(DoubleArray, Vec<f64>, "double[]");
+simple_value_from!(StringArray, Vec<String>, "string[]");
+simple_value_from!(Integer, isize, "int");
+simple_value_from!(IntegerArray, Vec<isize>, "int[]");
