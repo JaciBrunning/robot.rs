@@ -1,5 +1,9 @@
 use std::{ops::{Neg, Sub, Div}, f64::consts::PI, cell::RefCell};
 
+#[cfg(feature = "ntcore")]
+use ntcore_rs::GenericPublisher;
+use uom::si::f32::ElectricCurrent;
+
 use crate::{units::*, traits::Wrapper};
 
 pub trait Sensor<U> {
@@ -28,6 +32,7 @@ sensor_alias!(AngularSensor, Angle, get_angle);
 sensor_alias!(AngularVelocitySensor, AngularVelocity, get_angular_velocity);
 sensor_alias!(DisplacementSensor, Length, get_displacement);
 sensor_alias!(VelocitySensor, Velocity, get_velocity);
+sensor_alias!(CurrentSensor, ElectricCurrent, get_current);
 
 #[derive(Clone, Debug)]
 pub struct InvertedSensor<T>(pub T);
@@ -160,6 +165,92 @@ where
     });
 
     ret
+  }
+}
+
+#[cfg(feature = "ntcore")]
+pub struct ObservableSensor<U, T: Sensor<U>> {
+  sensor: T,
+  #[allow(unused)]
+  topic: crate::ntcore::Topic,
+  publisher: crate::ntcore::Publisher<f64>,
+  default: U
+}
+
+#[cfg(feature = "ntcore")]
+impl<U, T: Sensor<U>> ObservableSensor<U, T> {
+  pub fn new(topic: crate::ntcore::Topic, default: U, sensor: T) -> Self {
+    Self { sensor, publisher: topic.child("value").publish(), default, topic }
+  }
+}
+
+#[cfg(feature = "ntcore")]
+impl<U, T: Sensor<U>> Wrapper<T> for ObservableSensor<U, T> {
+  fn eject(self) -> T {
+    self.sensor
+  }
+}
+
+#[cfg(feature = "ntcore")]
+// Nothing like some generics soup in the morning
+impl<D: crate::units::Dimension + ?Sized, U: uom::si::Units<f64> + ?Sized, T: Sensor<Quantity<D, U, f64>>> Sensor<Quantity<D, U, f64>> for ObservableSensor<Quantity<D, U, f64>, T> {
+  fn get_sensor_value(&self) -> Option<Quantity<D, U, f64>> {
+    let v = self.sensor.get_sensor_value();
+    match &v {
+      Some(v) => {
+        self.publisher.set((*v).value).ok();
+      },
+      None => {
+        self.publisher.set(self.default.value).ok();
+      }
+    }
+    v
+  }
+}
+
+pub trait SensorExt<U> : Sized + Sensor<U> {
+  fn invert(self) -> InvertedSensor<Self>;
+
+  #[cfg(feature = "ntcore")]
+  fn observable(self, topic: crate::ntcore::Topic, default: U) -> ObservableSensor<U, Self>;
+}
+
+impl<U, T: Sensor<U>> SensorExt<U> for T {
+  fn invert(self) -> InvertedSensor<Self> {
+    InvertedSensor(self)
+  }
+
+  #[cfg(feature = "ntcore")]
+  fn observable(self, topic: crate::ntcore::Topic, default: U) -> ObservableSensor<U, Self> {
+    ObservableSensor::new(topic, default, self)
+  }
+}
+
+#[cfg(feature = "simulation")]
+pub mod sim {
+  use std::sync::{RwLock, Arc};
+
+  use super::Sensor;
+
+  #[derive(Debug, Clone)]
+  pub struct SimulatedSensor<U> {
+    value: Arc<RwLock<Option<U>>>
+  }
+
+  impl<U> SimulatedSensor<U> {
+    pub fn new() -> Self {
+      Self { value: Arc::new(RwLock::new(None)) }
+    }
+
+    pub fn set_sensor_value(&self, value: Option<U>) {
+      *self.value.write().unwrap() = value;
+    }
+  }
+
+  impl<U: Clone> Sensor<U> for SimulatedSensor<U> {
+    fn get_sensor_value(&self) -> Option<U> {
+      self.value.read().unwrap().clone()
+    }
   }
 }
 

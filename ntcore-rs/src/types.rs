@@ -201,27 +201,6 @@ impl NTValue {
   }
 }
 
-// macro_rules! value_from {
-//   ($variant:ident, $ty:ty) => {
-//     impl From<$ty> for Value {
-//       fn from(value: $ty) -> Self {
-//         Value::$variant(value)
-//       }
-//     }
-//   }
-// }
-
-// value_from!(Boolean, bool);
-// value_from!(Double, f64);
-// value_from!(String, String);
-// value_from!(BooleanArray, Vec<bool>);
-// value_from!(DoubleArray, Vec<f64>);
-// value_from!(StringArray, Vec<String>);
-// value_from!(Integer, isize);
-// value_from!(Float, f32);
-// value_from!(IntegerArray, Vec<isize>);
-// value_from!(FloatArray, Vec<f32>);
-
 macro_rules! simple_value_from {
   ($variant:ident, $ty:ty, $nt_type_str:literal) => {
     impl Value for $ty {

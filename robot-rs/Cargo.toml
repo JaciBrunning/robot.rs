@@ -6,7 +6,8 @@ edition = "2021"
 [features]
 hal = ["dep:robot-rs-wpilib-sys"]
 ntcore = ["dep:ntcore-rs"]
-default = ["hal", "ntcore"]
+simulation = []
+default = ["hal", "ntcore", "simulation"]
 
 [dependencies]
 approx = "0.5.1"

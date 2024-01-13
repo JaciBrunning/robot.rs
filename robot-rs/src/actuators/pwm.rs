@@ -90,18 +90,18 @@ impl PWMSpeedController {
 }
 
 impl VoltageController for PWMSpeedController {
-  fn set_voltage(&mut self, voltage: f64) {
-    self.set_speed(voltage / self.get_bus_voltage())
+  fn set_voltage(&mut self, voltage: crate::units::ElectricPotential) {
+    self.set_speed((voltage / self.get_bus_voltage()).value)
   }
 
-  fn get_set_voltage(&self) -> f64 {
+  fn get_set_voltage(&self) -> crate::units::ElectricPotential {
     self.get_speed() * self.get_bus_voltage()
   }
 }
 
 impl HasBusVoltage for PWMSpeedController {
-  fn get_bus_voltage(&self) -> f64 {
-    hal_safe_call!(HAL_GetVinVoltage()).unwrap()
+  fn get_bus_voltage(&self) -> crate::units::ElectricPotential {
+    crate::units::ElectricPotential::new::<crate::units::electric_potential::volt>(hal_safe_call!(HAL_GetVinVoltage()).unwrap())
   }
 }
 
