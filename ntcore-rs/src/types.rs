@@ -1,4 +1,4 @@
-use std::{slice, error::Error, fmt::Display};
+use std::{slice, error::Error, fmt::Display, ffi::CString};
 
 use crate::nt_internal::{NT_Type, NT_Value, NT_Now, NT_String};
 
@@ -144,9 +144,10 @@ impl NTValue {
       NTValue::Boolean(v) => f({ ntv.type_ = NT_Type::NT_BOOLEAN; ntv.data.v_boolean = *v as i32; ntv }),
       NTValue::Double(v) => f({ ntv.type_ = NT_Type::NT_DOUBLE; ntv.data.v_double = *v; ntv }),
       NTValue::String(v) => {
+        let cstr = CString::new(v.clone()).unwrap();
         ntv.type_ = NT_Type::NT_STRING;
         ntv.data.v_string.len = v.as_bytes().len();
-        ntv.data.v_string.str_ = v.as_ptr() as *mut i8;   // These casts are very unsafe, but we make the assumption that NT doesn't mutate the pointer
+        ntv.data.v_string.str_ = cstr.as_ptr() as *mut _;   // These casts are very unsafe, but we make the assumption that NT doesn't mutate the pointer
         f(ntv)
       },
       NTValue::Raw(v) => {
@@ -172,7 +173,7 @@ impl NTValue {
       },
       NTValue::StringArray(arr) => {
         let mut buf = vec![Default::default(); arr.len()];
-        for i in 0..arr.len() { buf[i] = NT_String { str_: arr[i].as_ptr() as *mut i8, len: arr[i].len()  } };
+        for i in 0..arr.len() { buf[i] = NT_String { str_: arr[i].as_ptr() as *mut _, len: arr[i].len()  } };
 
         ntv.type_ = NT_Type::NT_STRING_ARRAY;
         ntv.data.arr_string.size = arr.len();

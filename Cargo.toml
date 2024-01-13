@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "cargo-robot",
   "robot-rs",
   "ntcore-rs",
   "robot-rs-build-utils",

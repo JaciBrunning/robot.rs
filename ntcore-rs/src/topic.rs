@@ -167,17 +167,20 @@ impl Topic {
   }
 
   pub fn subscribe<V: Value>(&self) -> Subscriber<V> {
-    let s = unsafe { NT_Subscribe(self.handle, V::NT_TYPE.into(), V::NT_TYPE_STRING.as_ptr() as *const i8, &DEFAULT_PUBSUB) };
+    let ts = CString::new(V::NT_TYPE_STRING.to_owned()).unwrap();
+    let s = unsafe { NT_Subscribe(self.handle, V::NT_TYPE.into(), ts.as_ptr(), &DEFAULT_PUBSUB) };
     Subscriber { handle: s, value_t: PhantomData }
   }
 
   pub fn publish<V: Value>(&self) -> Publisher<V> {
-    let p = unsafe { NT_Publish(self.handle, V::NT_TYPE.into(), V::NT_TYPE_STRING.as_ptr() as *const i8, &DEFAULT_PUBSUB) };
+    let ts = CString::new(V::NT_TYPE_STRING.to_owned()).unwrap();
+    let p = unsafe { NT_Publish(self.handle, V::NT_TYPE.into(), ts.as_ptr(), &DEFAULT_PUBSUB) };
     Publisher { handle: p, value_t: PhantomData }
   }
 
   pub fn entry<V: Value>(&self) -> Entry<V> {
-    let e = unsafe { NT_GetEntryEx(self.handle, V::NT_TYPE.into(), V::NT_TYPE_STRING.as_ptr() as *const i8, &DEFAULT_PUBSUB) };
+    let ts = CString::new(V::NT_TYPE_STRING.to_owned()).unwrap();
+    let e = unsafe { NT_GetEntryEx(self.handle, V::NT_TYPE.into(), ts.as_ptr(), &DEFAULT_PUBSUB) };
     Entry { handle: e, value_t: PhantomData }
   }
 }

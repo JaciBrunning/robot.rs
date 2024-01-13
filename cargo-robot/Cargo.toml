@@ -1,0 +1,17 @@
+[package]
+name = "cargo-robot"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.79"
+cargo_metadata = "0.18.1"
+clap = { version = "4.4.16", features = ["derive"] }
+env_logger = "0.10.1"
+log = "0.4.20"
+pretty_env_logger = "0.5.0"
+serde_json = "1.0.111"
+sha-1 = "0.10.1"
+ssh2 = "0.9.4"

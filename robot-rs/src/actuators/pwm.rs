@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut};
+use std::{ops::{Deref, DerefMut}, ffi::CString};
 
 use robot_rs_wpilib_sys::{HAL_DigitalHandle, hal_safe_call, HAL_InitializePWMPort, HAL_GetPort, HAL_SetPWMPeriodScale, HAL_LatchPWMZero, HAL_SetPWMEliminateDeadband, HAL_SetPWMConfigMicroseconds, HAL_SetPWMDisabled, HAL_FreePWMPort, HAL_SetPWMSpeed, HAL_GetPWMSpeed, HAL_SetPWMPosition, HAL_GetPWMPosition, HAL_GetVinVoltage};
 
@@ -20,7 +20,8 @@ pub enum PWMPeriodMultiplier {
 
 impl PWM {
   pub fn new(port: usize) -> Self {
-    let handle = hal_safe_call!(HAL_InitializePWMPort(HAL_GetPort(port as i32), "PWM::new".as_ptr() as *const i8)).unwrap();
+    let cstr = CString::new("PWM::new".to_owned()).unwrap();
+    let handle = hal_safe_call!(HAL_InitializePWMPort(HAL_GetPort(port as i32), cstr.as_ptr())).unwrap();
 
     Self { port, handle }
   }
