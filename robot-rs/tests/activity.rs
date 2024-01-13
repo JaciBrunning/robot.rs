@@ -3,7 +3,7 @@ use std::time::Duration;
 use mockall::{automock, Sequence};
 use robot_rs::{activity::{Systems, Priority}, perform, activity_factory};
 use tokio::sync::mpsc;
-use futures::{join, FutureExt};
+use futures::join;
 
 pub struct DropNotifier<F: FnOnce()> {
   on_finish: Option<F>

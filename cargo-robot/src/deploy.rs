@@ -1,8 +1,8 @@
-use std::{process::Stdio, path::PathBuf, net::{SocketAddr, Ipv4Addr, ToSocketAddrs}};
+use std::{process::Stdio, path::PathBuf, net::{SocketAddr, ToSocketAddrs}};
 
 use cargo_metadata::{MetadataCommand, Metadata, Package};
 use clap::Args;
-use log::{debug, info};
+use log::info;
 
 use crate::{CargoRobotResult, Error, ssh::SSHSession};
 
@@ -57,7 +57,7 @@ impl DeployCommand {
       Some(ip) => vec![ip],
       None => match Self::get_robot_metadata_entry(package, "ip") {
         Ok(ips) => ips.as_str().unwrap().split(",").map(ToOwned::to_owned).collect(),
-        Err(e) => match args.team {
+        Err(_) => match args.team {
           Some(team) => Self::generate_ips_for_team(team),
           None => match Self::get_robot_metadata_entry(package, "team") {
             Ok(team) => Self::generate_ips_for_team(team.as_u64().unwrap() as usize),
