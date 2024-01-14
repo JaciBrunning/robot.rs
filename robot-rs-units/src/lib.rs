@@ -2,8 +2,10 @@ pub mod base;
 pub mod electrical;
 pub mod motion;
 pub mod traits;
+pub mod force;
 
 pub use base::*;
+pub use typenum;
 
 use std::{marker::PhantomData, ops::{Mul, Add, Div, Sub, AddAssign, SubAssign, Neg}, fmt::Debug};
 

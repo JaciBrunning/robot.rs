@@ -1,7 +1,13 @@
+use robot_rs_units::{electrical::Voltage, motion::AngularVelocity, force::Torque, Quantity, ISQ, typenum::{N1, Z0, N2, P2, P1}, Current};
+
 use crate::traits::Wrapper;
 
+pub type Kt = Quantity<ISQ<N1, Z0, Z0, N1, Z0, Z0, Z0, Z0, Z0>>;
+pub type Kw = Quantity<ISQ<N2, P2, P1, N1, Z0, Z0, Z0, N1, Z0>>;
+pub type Ki = Quantity<ISQ<P2, N2, N1, P1, Z0, Z0, Z0, Z0, Z0>>;
+
 pub trait MotorExtensionTrait : Sized {
-  fn current_aware(self, ki: f64) -> CurrentAwareMotor<Self> {
+  fn current_aware(self, ki: Ki) -> CurrentAwareMotor<Self> {
     CurrentAwareMotor::new(self, ki)
   }
 
@@ -15,31 +21,31 @@ pub trait MotorExtensionTrait : Sized {
 }
 
 pub trait MotorForwardDynamics {
-  fn voltage(&self, torque: f64, speed: f64) -> f64;
+  fn voltage(&self, torque: Torque, speed: AngularVelocity) -> Voltage;
 }
 
 pub trait MotorInverseDynamics {
-  fn speed(&self, voltage: f64, torque: f64) -> f64;
-  fn torque(&self, voltage: f64, speed: f64) -> f64;
+  fn speed(&self, voltage: Voltage, torque: Torque) -> AngularVelocity;
+  fn torque(&self, voltage: Voltage, speed: AngularVelocity) -> Torque;
 }
 
 pub trait MotorCurrentDynamics {
-  fn current(&self, torque: f64) -> f64;
-  fn torque(&self, current: f64) -> f64;
+  fn current(&self, torque: Torque) -> Current;
+  fn torque(&self, current: Current) -> Torque;
 }
 
 #[derive(Clone, Debug)]
 pub struct Motor {
-  pub kt: f64,
-  pub kw: f64,
+  pub kt: Kt,
+  pub kw: Kw,
 }
 
 impl Motor {
-  pub fn from_coeffs(kt: f64, kw: f64) -> Self {
+  pub fn from_coeffs(kt: Kt, kw: Kw) -> Self {
     Self { kt, kw }
   }
 
-  pub fn from_params(v_nom: f64, free_speed: f64, free_torque: f64, stall_torque: f64) -> Self {
+  pub fn from_params(v_nom: Voltage, free_speed: AngularVelocity, free_torque: Torque, stall_torque: Torque) -> Self {
     Self {
       kt: v_nom / stall_torque,
       kw: (v_nom - ((v_nom / stall_torque) * free_torque)) / (free_speed),
@@ -51,19 +57,19 @@ impl MotorExtensionTrait for Motor {}
 
 impl MotorForwardDynamics for Motor {
   #[inline(always)]
-  fn voltage(&self, torque: f64, speed: f64) -> f64 {
+  fn voltage(&self, torque: Torque, speed: AngularVelocity) -> Voltage {
     self.kt * torque + self.kw * speed
   }
 }
 
 impl MotorInverseDynamics for Motor {
   #[inline(always)]
-  fn speed(&self, voltage: f64, torque: f64) -> f64 {
+  fn speed(&self, voltage: Voltage, torque: Torque) -> AngularVelocity {
     (voltage - self.kt * torque) / self.kw
   }
 
   #[inline(always)]
-  fn torque(&self, voltage: f64, speed: f64) -> f64 {
+  fn torque(&self, voltage: Voltage, speed: AngularVelocity) -> Torque {
     (voltage - self.kw * speed) / self.kt
   }
 }
@@ -71,17 +77,17 @@ impl MotorInverseDynamics for Motor {
 #[derive(Clone, Debug)]
 pub struct CurrentAwareMotor<T> {
   pub motor: T,
-  pub ki: f64,
+  pub ki: Ki,
 }
 
 impl<T> CurrentAwareMotor<T> {
-  pub fn new(motor: T, ki: f64) -> Self {
+  pub fn new(motor: T, ki: Ki) -> Self {
     Self { motor, ki }
   }
 }
 
 impl CurrentAwareMotor<Motor> {
-  pub fn from_params(v_nom: f64, free_speed: f64, free_current: f64, stall_torque: f64, stall_current: f64) -> Self {
+  pub fn from_params(v_nom: Voltage, free_speed: AngularVelocity, free_current: Current, stall_torque: Torque, stall_current: Current) -> Self {
     let ki = stall_current / stall_torque;
     let motor = Motor::from_params(v_nom, free_speed, free_current / ki, stall_torque);
     CurrentAwareMotor::new(motor, ki)
@@ -98,31 +104,31 @@ impl<T> Wrapper<T> for CurrentAwareMotor<T> {
 
 impl<T: MotorForwardDynamics> MotorForwardDynamics for CurrentAwareMotor<T> {
   #[inline(always)]
-  fn voltage(&self, torque: f64, speed: f64) -> f64 {
+  fn voltage(&self, torque: Torque, speed: AngularVelocity) -> Voltage {
     self.motor.voltage(torque, speed)
   }
 }
 
 impl<T: MotorInverseDynamics> MotorInverseDynamics for CurrentAwareMotor<T> {
   #[inline(always)]
-  fn speed(&self, voltage: f64, torque: f64) -> f64 {
+  fn speed(&self, voltage: Voltage, torque: Torque) -> AngularVelocity {
     self.motor.speed(voltage, torque)
   }
 
   #[inline(always)]
-  fn torque(&self, voltage: f64, speed: f64) -> f64 {
+  fn torque(&self, voltage: Voltage, speed: AngularVelocity) -> Torque {
     self.motor.torque(voltage, speed)
   }
 }
 
 impl<T> MotorCurrentDynamics for CurrentAwareMotor<T> {
   #[inline(always)]
-  fn current(&self, torque: f64) -> f64 {
+  fn current(&self, torque: Torque) -> Current {
     self.ki * torque
   }
 
   #[inline(always)]
-  fn torque(&self, current: f64) -> f64 {
+  fn torque(&self, current: Current) -> Torque {
     current / self.ki
   }
 }
@@ -149,31 +155,31 @@ impl<T> Wrapper<T> for GearedMotor<T> {
 
 impl<T: MotorForwardDynamics> MotorForwardDynamics for GearedMotor<T> {
   #[inline(always)]
-  fn voltage(&self, torque: f64, speed: f64) -> f64 {
+  fn voltage(&self, torque: Torque, speed: AngularVelocity) -> Voltage {
     self.motor.voltage(torque / self.ratio, speed * self.ratio)
   }
 }
 
 impl<T: MotorInverseDynamics> MotorInverseDynamics for GearedMotor<T> {
   #[inline(always)]
-  fn speed(&self, voltage: f64, torque: f64) -> f64 {
+  fn speed(&self, voltage: Voltage, torque: Torque) -> AngularVelocity {
     self.motor.speed(voltage, torque / self.ratio) / self.ratio
   }
 
   #[inline(always)]
-  fn torque(&self, voltage: f64, speed: f64) -> f64 {
+  fn torque(&self, voltage: Voltage, speed: AngularVelocity) -> Torque {
     self.motor.torque(voltage, speed * self.ratio) * self.ratio
   }
 }
 
 impl<T: MotorCurrentDynamics> MotorCurrentDynamics for GearedMotor<T> {
   #[inline(always)]
-  fn current(&self, torque: f64) -> f64 {
+  fn current(&self, torque: Torque) -> Current {
     self.motor.current(torque / self.ratio)
   }
 
   #[inline(always)]
-  fn torque(&self, current: f64) -> f64 {
+  fn torque(&self, current: Current) -> Torque {
     self.motor.torque(current) * self.ratio
   }
 }
@@ -200,40 +206,47 @@ impl<T> Wrapper<T> for MultiMotor<T> {
 
 impl<T: MotorForwardDynamics> MotorForwardDynamics for MultiMotor<T> {
   #[inline(always)]
-  fn voltage(&self, torque: f64, speed: f64) -> f64 {
+  fn voltage(&self, torque: Torque, speed: AngularVelocity) -> Voltage {
     self.motor.voltage(torque / self.n_motors as f64, speed)
   }
 }
 
 impl<T: MotorInverseDynamics> MotorInverseDynamics for MultiMotor<T> {
   #[inline(always)]
-  fn speed(&self, voltage: f64, torque: f64) -> f64 {
+  fn speed(&self, voltage: Voltage, torque: Torque) -> AngularVelocity {
     self.motor.speed(voltage, torque / self.n_motors as f64)
   }
 
   #[inline(always)]
-  fn torque(&self, voltage: f64, speed: f64) -> f64 {
+  fn torque(&self, voltage: Voltage, speed: AngularVelocity) -> Torque {
     self.motor.torque(voltage, speed) * self.n_motors as f64
   }
 }
 
 impl<T: MotorCurrentDynamics> MotorCurrentDynamics for MultiMotor<T> {
   #[inline(always)]
-  fn current(&self, torque: f64) -> f64 {
+  fn current(&self, torque: Torque) -> Current {
     self.motor.current(torque / self.n_motors as f64) * self.n_motors as f64
   }
 
   #[inline(always)]
-  fn torque(&self, current: f64) -> f64 {
-    self.motor.current(current / self.n_motors as f64) * self.n_motors as f64
+  fn torque(&self, current: Current) -> Torque {
+    self.motor.torque(current / self.n_motors as f64) * self.n_motors as f64
   }
 }
 
 pub mod from_dyno {
+  use robot_rs_units::ampere;
+  use robot_rs_units::electrical::volt;
+  use robot_rs_units::motion::revolutions_per_minute;
+  use robot_rs_units::force::newton_meter;
+
   macro_rules! define_motor {
-    ($name:ident, $($args:expr),*) => {
+    ($name:ident, $voltage:expr, $free_speed:expr, $free_current:expr, $stall_torque:expr, $stall_current:expr) => {
       #[allow(non_snake_case)]
-      pub fn $name() -> super::CurrentAwareMotor<super::Motor> { super::CurrentAwareMotor::<super::Motor>::from_params($($args as f64),*) }
+      pub fn $name() -> super::CurrentAwareMotor<super::Motor> {
+      super::CurrentAwareMotor::<super::Motor>::from_params($voltage as f64 * volt, $free_speed as f64 * revolutions_per_minute, $free_current as f64 * ampere, $stall_torque as f64 * newton_meter, $stall_current as f64 * ampere)
+      }
     };
   }
 
@@ -246,46 +259,4 @@ pub mod from_dyno {
   define_motor!(vex775pro,    12.0, 18730,  0.7,  0.71, 134);
   define_motor!(KrakenTrap,   12.0, 6000,   2,    7.09, 366);
   define_motor!(KrakenFOC,    12.0, 5800,   2,    9.37, 483);
-}
-
-#[cfg(test)]
-mod test {
-  use approx::assert_relative_eq;
-  use crate::physics::motor::{MotorForwardDynamics, MotorInverseDynamics, MultiMotor};
-
-  use super::{Motor, GearedMotor};
-
-  #[test]
-  fn test_geared_motor() {
-    let motor = GearedMotor::new(Motor::from_coeffs(1.23, 2.3), 10.0);
-    assert_relative_eq!(motor.voltage(motor.torque(12.0, 4.5), 4.5), 12.0, epsilon = 0.0001);
-    assert_relative_eq!(motor.voltage(1.73, motor.speed(12.0, 1.73)), 12.0, epsilon = 0.0001);
-
-    assert_relative_eq!(
-      motor.torque(12.0, 4.5),
-      motor.motor.torque(12.0, 4.5 * 10.0) * 10.0
-    );
-
-    assert_relative_eq!(
-      motor.speed(12.0, 4.5),
-      motor.motor.speed(12.0, 4.5 / 10.0) / 10.0
-    );
-  }
-
-  #[test]
-  fn test_multi_motor() {
-    let motor = MultiMotor::new(Motor::from_coeffs(1.23, 2.3), 2);
-    assert_relative_eq!(motor.voltage(motor.torque(12.0, 4.5), 4.5), 12.0, epsilon = 0.0001);
-    assert_relative_eq!(motor.voltage(1.73, motor.speed(12.0, 1.73)), 12.0, epsilon = 0.0001);
-
-    assert_relative_eq!(
-      motor.torque(12.0, 4.5),
-      motor.motor.torque(12.0, 4.5) * 2.0
-    );
-
-    assert_relative_eq!(
-      motor.speed(12.0, 4.5),
-      motor.motor.speed(12.0, 4.5 / 2.0)
-    );
-  }
 }

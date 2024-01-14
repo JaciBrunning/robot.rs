@@ -31,6 +31,7 @@ unit!(Jerk, feet_per_second3, 0.3048, 0.0);
 
 unit!(AngularVelocity, rads_per_second, 1.0, 0.0);
 unit!(AngularVelocity, degrees_per_second, PI / 180.0, 0.0);
+unit!(AngularVelocity, revolutions_per_minute, 2.0*PI / 60.0, 0.0);
 
 unit!(AngularAcceleration, rads_per_second2, 1.0, 0.0);
 unit!(AngularAcceleration, degrees_per_second2, PI / 180.0, 0.0);
@@ -39,6 +40,9 @@ unit!(AngularJerk, rads_per_second3, 1.0, 0.0);
 unit!(AngularJerk, degrees_per_second3, PI / 180.0, 0.0);
 
 unit!(TickVelocity, ticks_per_second, 1.0, 0.0);
+
+#[allow(non_camel_case_types)]
+pub type rpm = revolutions_per_minute;
 
 #[cfg(test)]
 mod tests {
