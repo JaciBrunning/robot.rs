@@ -2,7 +2,7 @@ use std::{ops::{Neg, Sub, Div}, f64::consts::PI, cell::RefCell};
 
 #[cfg(feature = "ntcore")]
 use ntcore_rs::GenericPublisher;
-use uom::si::f32::ElectricCurrent;
+use robot_rs_units::motion::{TickVelocity, AngularVelocity, Velocity, rads_per_second};
 
 use crate::{units::*, traits::Wrapper};
 
@@ -26,13 +26,13 @@ macro_rules! sensor_alias {
 }
 
 sensor_alias!(BinarySensor, bool, get_state);
-sensor_alias!(Encoder, EncoderTicks, get_ticks);
-sensor_alias!(VelocityEncoder, EncoderTickVelocity, get_tick_velocity);
+sensor_alias!(Encoder, Ticks, get_ticks);
+sensor_alias!(VelocityEncoder, TickVelocity, get_tick_velocity);
 sensor_alias!(AngularSensor, Angle, get_angle);
 sensor_alias!(AngularVelocitySensor, AngularVelocity, get_angular_velocity);
 sensor_alias!(DisplacementSensor, Length, get_displacement);
 sensor_alias!(VelocitySensor, Velocity, get_velocity);
-sensor_alias!(CurrentSensor, ElectricCurrent, get_current);
+sensor_alias!(CurrentSensor, Current, get_current);
 
 #[derive(Clone, Debug)]
 pub struct InvertedSensor<T>(pub T);
@@ -61,11 +61,11 @@ impl<U: Neg<Output = U>, T: Sensor<U>> Sensor<U> for InvertedSensor<T> {
 #[derive(Clone, Debug)]
 pub struct EncoderToAngular<T> {
   pub encoder: T,
-  pub ticks_per_rad: EncoderTicks
+  pub ticks_per_rad: Ticks
 }
 
 impl<T> EncoderToAngular<T> {
-  pub fn new(encoder: T, ticks_per_revolution: EncoderTicks) -> Self {
+  pub fn new(encoder: T, ticks_per_revolution: Ticks) -> Self {
     Self { encoder, ticks_per_rad: ticks_per_revolution / (2.0 * PI) }
   }
 }
@@ -80,7 +80,7 @@ impl<T: Encoder> Sensor<Angle> for EncoderToAngular<T> {
   #[inline(always)]
   fn get_sensor_value(&self) -> Option<Angle> {
     self.encoder.get_ticks().map(|ticks| {
-      Angle::new::<angle::radian>((ticks / self.ticks_per_rad).value)
+      Angle::new::<radian>((ticks / self.ticks_per_rad).to_base())
     })
   }
 }
@@ -89,7 +89,7 @@ impl<T: VelocityEncoder> Sensor<AngularVelocity> for EncoderToAngular<T> {
   #[inline(always)]
   fn get_sensor_value(&self) -> Option<AngularVelocity> {
     self.encoder.get_tick_velocity().map(|tick_vel| {
-      AngularVelocity::new::<angular_velocity::radian_per_second>((tick_vel / self.ticks_per_rad).value)
+      AngularVelocity::new::<rads_per_second>((tick_vel / self.ticks_per_rad).to_base())
     })
   }
 }
@@ -115,14 +115,14 @@ impl<T> Wrapper<T> for AngularToLinear<T> {
 impl<T: AngularSensor> Sensor<Length> for AngularToLinear<T> {
   #[inline(always)]
   fn get_sensor_value(&self) -> Option<Length> {
-    self.angular.get_angle().map(|x| x * self.radius)
+    self.angular.get_angle().map(|x| x / (1.0 * radian) * self.radius)
   }
 }
 
 impl<T: AngularVelocitySensor> Sensor<Velocity> for AngularToLinear<T> {
   #[inline(always)]
   fn get_sensor_value(&self) -> Option<Velocity> {
-    self.angular.get_angular_velocity().map(|x| x * self.radius)
+    self.angular.get_angular_velocity().map(|x| x / (1.0 * radian) * self.radius)
   }
 }
 
@@ -193,15 +193,15 @@ impl<U, T: Sensor<U>> Wrapper<T> for ObservableSensor<U, T> {
 
 #[cfg(feature = "ntcore")]
 // Nothing like some generics soup in the morning
-impl<D: crate::units::Dimension + ?Sized, U: uom::si::Units<f64> + ?Sized, T: Sensor<Quantity<D, U, f64>>> Sensor<Quantity<D, U, f64>> for ObservableSensor<Quantity<D, U, f64>, T> {
-  fn get_sensor_value(&self) -> Option<Quantity<D, U, f64>> {
+impl<Q: QuantityBase, T: Sensor<Q>> Sensor<Q> for ObservableSensor<Q, T> {
+  fn get_sensor_value(&self) -> Option<Q> {
     let v = self.sensor.get_sensor_value();
     match &v {
       Some(v) => {
-        self.publisher.set((*v).value).ok();
+        self.publisher.set((*v).to_base()).ok();
       },
       None => {
-        self.publisher.set(self.default.value).ok();
+        self.publisher.set(self.default.to_base()).ok();
       }
     }
     v
@@ -260,6 +260,7 @@ mod tests {
 
   use approx::assert_relative_eq;
   use num_traits::Zero;
+  use robot_rs_units::motion::meters_per_second;
 
   use crate::units::*;
   use super::{Sensor, DifferentiableSensor};
@@ -276,7 +277,7 @@ mod tests {
 
   #[test]
   fn test_diff() {
-    let sensor = MockSensor { value: Arc::new(Mutex::new(Length::new::<length::meter>(0.0))) };
+    let sensor = MockSensor { value: Arc::new(Mutex::new(Length::new::<meter>(0.0))) };
 
     let value = sensor.value.clone();
     let diff: DifferentiableSensor<Length, _> = DifferentiableSensor::new(sensor);
@@ -284,8 +285,8 @@ mod tests {
     assert_eq!(None, diff.get_sensor_value());
     std::thread::sleep(Duration::from_millis(100));
     assert_eq!(Some(Zero::zero()), diff.get_sensor_value());
-    *(value.lock().unwrap()) = Length::new::<length::meter>(1.5);
+    *(value.lock().unwrap()) = Length::new::<meter>(1.5);
     std::thread::sleep(Duration::from_millis(100));
-    assert_relative_eq!(15.0, diff.get_sensor_value().unwrap().get::<velocity::meter_per_second>(), epsilon = 2.0);
+    assert_relative_eq!(15.0, diff.get_sensor_value().unwrap().to::<meters_per_second>(), epsilon = 2.0);
   }
 }

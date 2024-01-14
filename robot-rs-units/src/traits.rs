@@ -60,6 +60,9 @@ pub trait MaybeUnitNumber : Zero + Add<Self, Output = Self> + Sub<Self, Output =
   fn floor(self) -> Self;
   fn ceil(self) -> Self;
   fn round(self) -> Self;
+
+  fn max(self, other: Self) -> Self;
+  fn min(self, other: Self) -> Self;
 }
 
 impl<D: Dimension + ?Sized> MaybeUnitNumber for Quantity<D> {
@@ -94,6 +97,14 @@ impl<D: Dimension + ?Sized> MaybeUnitNumber for Quantity<D> {
   fn round(self) -> Self {
     Quantity::from_base(self.base_unit_value.round())
   }
+
+  fn max(self, other: Self) -> Self {
+    Quantity::from_base(self.base_unit_value.max(other.base_unit_value))
+  }
+
+  fn min(self, other: Self) -> Self {
+    Quantity::from_base(self.base_unit_value.min(other.base_unit_value))
+  }
 }
 
 impl<T: Float> MaybeUnitNumber for T {
@@ -127,5 +138,13 @@ impl<T: Float> MaybeUnitNumber for T {
 
   fn round(self) -> Self {
     T::round(self)
+  }
+
+  fn max(self, other: Self) -> Self {
+    T::max(self, other)
+  }
+
+  fn min(self, other: Self) -> Self {
+    T::min(self, other)
   }
 }

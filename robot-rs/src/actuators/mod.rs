@@ -3,30 +3,33 @@ pub mod pwm;
 
 #[cfg(feature = "ntcore")]
 use ntcore_rs::GenericPublisher;
+use robot_rs_units::QuantityBase;
+use robot_rs_units::traits::MaybeUnitNumber;
 
 use crate::traits::Wrapper;
+use crate::units::electrical::Voltage;
 
 pub trait VoltageController {
-  fn set_voltage(&mut self, voltage: crate::units::ElectricPotential);
-  fn get_set_voltage(&self) -> crate::units::ElectricPotential;
+  fn set_voltage(&mut self, voltage: Voltage);
+  fn get_set_voltage(&self) -> Voltage;
 }
 
 impl<'a, T: VoltageController> VoltageController for &'a mut T {
-  fn set_voltage(&mut self, voltage: crate::units::ElectricPotential) {
+  fn set_voltage(&mut self, voltage: Voltage) {
     (**self).set_voltage(voltage)
   }
 
-  fn get_set_voltage(&self) -> crate::units::ElectricPotential {
+  fn get_set_voltage(&self) -> Voltage {
     (**self).get_set_voltage()
   }
 }
 
 pub trait HasBusVoltage {
-  fn get_bus_voltage(&self) -> crate::units::ElectricPotential;
+  fn get_bus_voltage(&self) -> Voltage;
 }
 
 impl<'a, T: HasBusVoltage> HasBusVoltage for &'a T {
-  fn get_bus_voltage(&self) -> crate::units::ElectricPotential {
+  fn get_bus_voltage(&self) -> Voltage {
     (**self).get_bus_voltage()
   }
 }
@@ -46,19 +49,19 @@ impl<T: VoltageController> Wrapper<T> for InvertedVoltageController<T> {
 
 impl<T: VoltageController> VoltageController for InvertedVoltageController<T> {
   #[inline(always)]
-  fn set_voltage(&mut self, voltage: crate::units::ElectricPotential) {
+  fn set_voltage(&mut self, voltage: Voltage) {
     self.0.set_voltage(-voltage);
   }
 
   #[inline(always)]
-  fn get_set_voltage(&self) -> crate::units::ElectricPotential {
+  fn get_set_voltage(&self) -> Voltage {
     -self.0.get_set_voltage()
   }
 }
 
 impl<T: VoltageController + HasBusVoltage> HasBusVoltage for InvertedVoltageController<T> {
   #[inline(always)]
-  fn get_bus_voltage(&self) -> crate::units::ElectricPotential {
+  fn get_bus_voltage(&self) -> Voltage {
     self.0.get_bus_voltage()
   }
 }
@@ -66,12 +69,12 @@ impl<T: VoltageController + HasBusVoltage> HasBusVoltage for InvertedVoltageCont
 #[derive(Debug, Clone)]
 pub struct ClampedVoltageController<T: VoltageController> {
   controller: T,
-  min_voltage: crate::units::ElectricPotential,
-  max_voltage: crate::units::ElectricPotential,
+  min_voltage: Voltage,
+  max_voltage: Voltage,
 }
 
 impl<T: VoltageController> ClampedVoltageController<T> {
-  pub fn new(min_voltage: crate::units::ElectricPotential, max_voltage: crate::units::ElectricPotential, vc: T) -> Self {
+  pub fn new(min_voltage: Voltage, max_voltage: Voltage, vc: T) -> Self {
     Self { controller: vc, min_voltage, max_voltage }
   }
 }
@@ -84,19 +87,19 @@ impl<T: VoltageController> Wrapper<T> for ClampedVoltageController<T> {
 
 impl<T: VoltageController> VoltageController for ClampedVoltageController<T> {
   #[inline(always)]
-  fn set_voltage(&mut self, voltage: crate::units::ElectricPotential) {
+  fn set_voltage(&mut self, voltage: Voltage) {
     self.controller.set_voltage(voltage.max(self.min_voltage).min(self.max_voltage))
   }
 
   #[inline(always)]
-  fn get_set_voltage(&self) -> crate::units::ElectricPotential {
+  fn get_set_voltage(&self) -> Voltage {
     self.controller.get_set_voltage()
   }
 }
 
 impl<T: VoltageController + HasBusVoltage> HasBusVoltage for ClampedVoltageController<T> {
   #[inline(always)]
-  fn get_bus_voltage(&self) -> crate::units::ElectricPotential {
+  fn get_bus_voltage(&self) -> Voltage {
     self.controller.get_bus_voltage()
   }
 }
@@ -126,13 +129,13 @@ impl<T: VoltageController> Wrapper<T> for ObservableVoltageController<T> {
 #[cfg(feature = "ntcore")]
 impl<T: VoltageController> VoltageController for ObservableVoltageController<T> {
   #[inline(always)]
-  fn set_voltage(&mut self, voltage: crate::units::ElectricPotential) {
+  fn set_voltage(&mut self, voltage: Voltage) {
     self.controller.set_voltage(voltage);
-    self.publisher.set(voltage.value).ok();
+    self.publisher.set(voltage.to_base()).ok();
   }
 
   #[inline(always)]
-  fn get_set_voltage(&self) -> crate::units::ElectricPotential {
+  fn get_set_voltage(&self) -> Voltage {
     self.controller.get_set_voltage()
   }
 }
@@ -140,14 +143,14 @@ impl<T: VoltageController> VoltageController for ObservableVoltageController<T> 
 #[cfg(feature = "ntcore")]
 impl<T: VoltageController + HasBusVoltage> HasBusVoltage for ObservableVoltageController<T> {
   #[inline(always)]
-  fn get_bus_voltage(&self) -> crate::units::ElectricPotential {
+  fn get_bus_voltage(&self) -> Voltage {
     self.controller.get_bus_voltage()
   }
 }
 
 pub trait VoltageControllerExt : Sized + VoltageController {
   fn invert(self) -> InvertedVoltageController<Self>;
-  fn clamp(self, min_voltage: crate::units::ElectricPotential, max_voltage: crate::units::ElectricPotential) -> ClampedVoltageController<Self>;
+  fn clamp(self, min_voltage: Voltage, max_voltage: Voltage) -> ClampedVoltageController<Self>;
 
   #[cfg(feature = "ntcore")]
   fn observable(self, topic: crate::ntcore::Topic) -> ObservableVoltageController<Self>;
@@ -158,7 +161,7 @@ impl<T: VoltageController> VoltageControllerExt for T {
     InvertedVoltageController::from(self)
   }
 
-  fn clamp(self, min_voltage: crate::units::ElectricPotential, max_voltage: crate::units::ElectricPotential) -> ClampedVoltageController<Self> {
+  fn clamp(self, min_voltage: Voltage, max_voltage: Voltage) -> ClampedVoltageController<Self> {
     ClampedVoltageController::new(min_voltage, max_voltage, self)
   }
 
@@ -172,25 +175,27 @@ impl<T: VoltageController> VoltageControllerExt for T {
 pub mod sim {
   use std::sync::{RwLock, Arc};
 
+  use robot_rs_units::electrical::Voltage;
+
   use super::VoltageController;
 
   #[derive(Debug, Clone)]
   pub struct SimulatedVoltageController {
-    voltage: Arc<RwLock<crate::units::ElectricPotential>>
+    voltage: Arc<RwLock<Voltage>>
   }
 
   impl SimulatedVoltageController {
-    pub fn new(initial_voltage: crate::units::ElectricPotential) -> Self {
+    pub fn new(initial_voltage: Voltage) -> Self {
       Self { voltage: Arc::new(RwLock::new(initial_voltage)) }
     }
   }
 
   impl VoltageController for SimulatedVoltageController {
-    fn set_voltage(&mut self, voltage: crate::units::ElectricPotential) {
+    fn set_voltage(&mut self, voltage: Voltage) {
       *self.voltage.write().unwrap() = voltage;
     }
 
-    fn get_set_voltage(&self) -> crate::units::ElectricPotential {
+    fn get_set_voltage(&self) -> Voltage {
       self.voltage.read().unwrap().clone()
     }
   }

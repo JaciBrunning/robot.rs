@@ -3,10 +3,12 @@ pub mod electrical;
 pub mod motion;
 pub mod traits;
 
+pub use base::*;
+
 use std::{marker::PhantomData, ops::{Mul, Add, Div, Sub, AddAssign, SubAssign, Neg}, fmt::Debug};
 
 use approx::{RelativeEq, AbsDiffEq};
-use num_traits::{Zero, One, ToPrimitive};
+use num_traits::Zero;
 
 // Inspired by uom, but with some changes to better support our use-case.
 pub trait Dimension : Send + Sync + Unpin {
@@ -18,9 +20,10 @@ pub trait Dimension : Send + Sync + Unpin {
   type Molarity: typenum::Integer;
   type LuminousIntensity: typenum::Integer;
   type Angle: typenum::Integer;
+  type Tick: typenum::Integer;
 }
 
-pub type ISQ<Time, Length, Mass, Current, Temperature, Molarity, LuminousIntensity, Angle> = dyn Dimension<Time = Time, Length = Length, Mass = Mass, Current = Current, Temperature = Temperature, Molarity = Molarity, LuminousIntensity = LuminousIntensity, Angle = Angle>;
+pub type ISQ<Time, Length, Mass, Current, Temperature, Molarity, LuminousIntensity, Angle, Tick> = dyn Dimension<Time = Time, Length = Length, Mass = Mass, Current = Current, Temperature = Temperature, Molarity = Molarity, LuminousIntensity = LuminousIntensity, Angle = Angle, Tick = Tick>;
 
 pub trait QuantityBase : Sized {
   type Dimension: ?Sized;
@@ -36,11 +39,18 @@ pub trait Unit<Q> {
 }
 
 // Quantities
-#[derive(Clone, Copy)]
 pub struct Quantity<Dim: ?Sized + Dimension> {
   dimension: PhantomData<Dim>,
   base_unit_value: f64
 }
+
+impl<Dim: ?Sized + Dimension> Clone for Quantity<Dim> {
+  fn clone(&self) -> Self {
+    Self { dimension: PhantomData, base_unit_value: self.base_unit_value.clone() }
+  }
+}
+
+impl<Dim: ?Sized + Dimension> Copy for Quantity<Dim> { }
 
 impl<Dim: ?Sized + Dimension> QuantityBase for Quantity<Dim> {
   type Dimension = Dim;
@@ -202,6 +212,8 @@ where
   <Dl::LuminousIntensity as Add<Dr::LuminousIntensity>>::Output: typenum::Integer,
   Dl::Angle: Add<Dr::Angle>,
   <Dl::Angle as Add<Dr::Angle>>::Output: typenum::Integer,
+  Dl::Tick: Add<Dr::Tick>,
+  <Dl::Tick as Add<Dr::Tick>>::Output: typenum::Integer,
 {
   type Output = Quantity<
     ISQ<
@@ -213,6 +225,7 @@ where
       <Dl::Molarity as Add<Dr::Molarity>>::Output,
       <Dl::LuminousIntensity as Add<Dr::LuminousIntensity>>::Output,
       <Dl::Angle as Add<Dr::Angle>>::Output,
+      <Dl::Tick as Add<Dr::Tick>>::Output,
     >
   >;
 
@@ -242,6 +255,8 @@ where
   <Dl::LuminousIntensity as Sub<Dr::LuminousIntensity>>::Output: typenum::Integer,
   Dl::Angle: Sub<Dr::Angle>,
   <Dl::Angle as Sub<Dr::Angle>>::Output: typenum::Integer,
+  Dl::Tick: Sub<Dr::Tick>,
+  <Dl::Tick as Sub<Dr::Tick>>::Output: typenum::Integer,
 {
   type Output = Quantity<
     ISQ<
@@ -253,6 +268,7 @@ where
       <Dl::Molarity as Sub<Dr::Molarity>>::Output,
       <Dl::LuminousIntensity as Sub<Dr::LuminousIntensity>>::Output,
       <Dl::Angle as Sub<Dr::Angle>>::Output,
+      <Dl::Tick as Sub<Dr::Tick>>::Output,
     >
   >;
 

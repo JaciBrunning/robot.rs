@@ -1,5 +1,6 @@
 use std::{ops::{Deref, DerefMut}, ffi::CString};
 
+use robot_rs_units::{electrical::{volt, Voltage}, QuantityBase};
 use robot_rs_wpilib_sys::{HAL_DigitalHandle, hal_safe_call, HAL_InitializePWMPort, HAL_GetPort, HAL_SetPWMPeriodScale, HAL_LatchPWMZero, HAL_SetPWMEliminateDeadband, HAL_SetPWMConfigMicroseconds, HAL_SetPWMDisabled, HAL_FreePWMPort, HAL_SetPWMSpeed, HAL_GetPWMSpeed, HAL_SetPWMPosition, HAL_GetPWMPosition, HAL_GetVinVoltage};
 
 use crate::traits::Wrapper;
@@ -90,18 +91,18 @@ impl PWMSpeedController {
 }
 
 impl VoltageController for PWMSpeedController {
-  fn set_voltage(&mut self, voltage: crate::units::ElectricPotential) {
-    self.set_speed((voltage / self.get_bus_voltage()).value)
+  fn set_voltage(&mut self, voltage: Voltage) {
+    self.set_speed((voltage / self.get_bus_voltage()).into())
   }
 
-  fn get_set_voltage(&self) -> crate::units::ElectricPotential {
+  fn get_set_voltage(&self) -> Voltage {
     self.get_speed() * self.get_bus_voltage()
   }
 }
 
 impl HasBusVoltage for PWMSpeedController {
-  fn get_bus_voltage(&self) -> crate::units::ElectricPotential {
-    crate::units::ElectricPotential::new::<crate::units::electric_potential::volt>(hal_safe_call!(HAL_GetVinVoltage()).unwrap())
+  fn get_bus_voltage(&self) -> Voltage {
+    Voltage::new::<volt>(hal_safe_call!(HAL_GetVinVoltage()).unwrap())
   }
 }
 
