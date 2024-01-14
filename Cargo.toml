@@ -7,5 +7,6 @@ members = [
   "robot-rs-build-utils",
   "robot-rs-ntcore-sys",
   "robot-rs-wpilib-sys",
+  "robot-rs-units",
   "robot-rs-macros",
 ]
