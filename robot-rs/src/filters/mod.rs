@@ -4,6 +4,9 @@ pub mod binary;
 pub mod feedforward;
 pub mod linear;
 pub mod pid;
+pub mod predictive;
+
+// TODO: Can we use Filters for Actuators and Sensors? Instead of a bunch of classes?
 
 pub trait Filter<I> {
   type Output;
