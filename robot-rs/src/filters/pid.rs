@@ -96,7 +96,7 @@ impl<
   PV: Mul<Time> + Div<Time> + Copy,
   Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy,
   Time: Sub<Time, Output = Time> + Copy
-> Filter<PV, Output> for PID<PV, Output, Time>
+> Filter<PV> for PID<PV, Output, Time>
 where
   PV: Mul<Kp<PV, Output>, Output = Output> + Sub<PV, Output = PV>,
   Integral<PV, Time>: Copy + Zero + Mul<Ki<PV, Output, Time>, Output = Output>,
@@ -105,6 +105,8 @@ where
   Ki<PV, Output, Time>: Zero + Copy,
   Kd<PV, Output, Time>: Zero + Copy,
 {
+  type Output = Output;
+
   fn calculate(&mut self, input: PV) -> Output {
     let now = (self.get_time)();
     let last = self.last();
@@ -212,7 +214,7 @@ impl<
   PV: Mul<Time> + Div<Time> + Copy + ToFloat,
   Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy + ToFloat,
   Time: Sub<Time, Output = Time> + Copy
-> Filter<PV, Output> for TunablePID<PV, Output, Time>
+> Filter<PV> for TunablePID<PV, Output, Time>
 where
   PV: Mul<Kp<PV, Output>, Output = Output> + Sub<PV, Output = PV>,
   Integral<PV, Time>: Copy + Zero + Mul<Ki<PV, Output, Time>, Output = Output> + ToFloat,
@@ -221,6 +223,8 @@ where
   Ki<PV, Output, Time>: Zero + Copy + ToFloat + FromFloat,
   Kd<PV, Output, Time>: Zero + Copy + ToFloat + FromFloat,
 {
+  type Output = Output;
+  
   fn calculate(&mut self, input: PV) -> Output {
     match self.kp_entry.get() {
       Some(Ok(kp)) => { self.pid.kp = FromFloat::from_f64(kp); },

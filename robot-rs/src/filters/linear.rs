@@ -22,7 +22,7 @@ impl<GI: Clone, GO: Clone, I, O> LinearFilter<GI, GO, I, O> {
   }
 }
 
-impl<GI, GO, I, O> Filter<I, O> for LinearFilter<GI, GO, I, O>
+impl<GI, GO, I, O> Filter<I> for LinearFilter<GI, GO, I, O>
 where
   O: Zero,
   GI: Copy,
@@ -34,6 +34,8 @@ where
   O: Sub<O, Output = O>,
   O: Add<O, Output = O>
 {
+  type Output = O;
+  
   fn calculate(&mut self, input: I) -> O {
     if self.ff_gains.len() > 0 {
       if self.inputs.len() >= self.ff_gains.len() {

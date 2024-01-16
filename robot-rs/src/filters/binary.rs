@@ -22,7 +22,9 @@ impl EdgeFilter {
   }
 }
 
-impl Filter<bool, bool> for EdgeFilter {
+impl Filter<bool> for EdgeFilter {
+  type Output = bool;
+  
   fn calculate(&mut self, input: bool) -> bool {
     let is_trigd = match (&self.edge, input, self.last) {
       (Edge::Rising, true, Some(false)) => true,
