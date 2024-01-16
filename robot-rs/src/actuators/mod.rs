@@ -58,7 +58,7 @@ pub type ClampedActuator<T, U> = FilteredActuator<T, U, ClampingFilter<U>, U>;
 
 #[cfg(feature = "ntcore")]
 pub struct ObservableActuator<T: Actuator<U>, U> {
-  actuator: T,
+  pub actuator: T,
   #[allow(unused)]
   topic: crate::ntcore::Topic,
   publisher: crate::ntcore::Publisher<f64>,
@@ -91,6 +91,7 @@ impl<T: Actuator<U>, U: ToFloat + Copy> Actuator<U> for ObservableActuator<T, U>
 pub trait ActuatorExt<U> : Sized + Actuator<U> {
   fn invert(self) -> InvertedActuator<Self, U>;
   fn clamp(self, min: U, max: U) -> ClampedActuator<Self, U>;
+  fn filter<F, I>(self, filter: F) -> FilteredActuator<Self, U, F, I>;
 
   #[cfg(feature = "ntcore")]
   fn observable(self, topic: crate::ntcore::Topic) -> ObservableActuator<Self, U>;
@@ -105,6 +106,10 @@ impl<T: Actuator<U>, U> ActuatorExt<U> for T {
     FilteredActuator::new(self, ClampingFilter::new(min, max))
   }
 
+  fn filter<F, I>(self, filter: F) -> FilteredActuator<Self, U, F, I> {
+    FilteredActuator::new(self, filter)
+  }
+
   #[cfg(feature = "ntcore")]
   fn observable(self, topic: crate::ntcore::Topic) -> ObservableActuator<Self, U> {
     ObservableActuator::new(topic, self)
@@ -116,6 +121,10 @@ pub mod sim {
   use std::sync::{RwLock, Arc};
 
   use super::Actuator;
+
+  pub trait ReadableActuator<U> : Actuator<U> {
+    fn get_actuator_value(&self) -> U;
+  }
 
   #[derive(Debug, Clone)]
   pub struct SimulatedActuator<U> {
@@ -131,6 +140,12 @@ pub mod sim {
   impl<U: Clone> Actuator<U> for SimulatedActuator<U> {
     fn set_actuator_value(&mut self, demand: U) {
       *self.demand.write().unwrap() = demand;
+    }
+  }
+
+  impl<U: Clone> ReadableActuator<U> for SimulatedActuator<U> {
+    fn get_actuator_value(&self) -> U {
+      self.demand.read().unwrap().clone()
     }
   }
 }

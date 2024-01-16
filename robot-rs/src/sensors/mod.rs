@@ -157,6 +157,7 @@ pub type InvertedSensor<T, U> = FilteredSensor<T, U, InvertingFilter<U>>;
 
 pub trait SensorExt<U> : Sized + Sensor<U> {
   fn invert(self) -> InvertedSensor<Self, U>;
+  fn filter<F>(self, filter: F) -> FilteredSensor<Self, U, F>;
 
   #[cfg(feature = "ntcore")]
   fn observable(self, topic: crate::ntcore::Topic) -> ObservableSensor<U, Self>;
@@ -165,6 +166,10 @@ pub trait SensorExt<U> : Sized + Sensor<U> {
 impl<U, T: Sensor<U>> SensorExt<U> for T {
   fn invert(self) -> InvertedSensor<Self, U> {
     FilteredSensor::new(self, InvertingFilter::new())
+  }
+
+  fn filter<F>(self, filter: F) -> FilteredSensor<Self, U, F> {
+    FilteredSensor::new(self, filter)
   }
 
   #[cfg(feature = "ntcore")]

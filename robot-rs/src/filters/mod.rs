@@ -70,19 +70,18 @@ impl<T: PartialOrd<T> + Copy> Filter<T> for ClampingFilter<T> {
   }
 }
 
-pub struct ChainedFiltersA<A, B, I> {
+pub struct ChainedFiltersA<A, B> {
   pub a: A,
   pub b: B,
-  input_type: PhantomData<I>
 }
 
-impl<A, B, I> ChainedFiltersA<A, B, I> {
+impl<A, B> ChainedFiltersA<A, B> {
   pub fn new(a: A, b: B) -> Self {
-    Self { a, b, input_type: PhantomData }
+    Self { a, b }
   }
 }
 
-impl<A, B, I> Filter<I> for ChainedFiltersA<A, B, I>
+impl<A, B, I> Filter<I> for ChainedFiltersA<A, B>
 where
   A: Filter<I>,
   B: Filter<<A as Filter<I>>::Output>
@@ -99,7 +98,7 @@ where
   }
 }
 
-impl<A, B, I> HasSetpoint<I> for ChainedFiltersA<A, B, I>
+impl<A, B, I> HasSetpoint<I> for ChainedFiltersA<A, B>
 where
   A: HasSetpoint<I>
 {

@@ -170,6 +170,7 @@ pub struct TunablePID<
   kd_entry: Entry<f64>,
   setpoint_pub: Publisher<f64>,
   error_pub: Publisher<f64>,
+  pv_pub: Publisher<f64>,
   integral_sum_pub: Publisher<f64>,
   output_pub: Publisher<f64>
 }
@@ -190,6 +191,7 @@ where
       kd_entry: topic.child("gains/Kd").entry(),
       setpoint_pub: topic.child("setpoint").publish(),
       error_pub: topic.child("error").publish(),
+      pv_pub: topic.child("processvariable").publish(),
       integral_sum_pub: topic.child("integralsum").publish(),
       output_pub: topic.child("output").publish()
     }
@@ -224,7 +226,7 @@ where
   Kd<PV, Output, Time>: Zero + Copy + ToFloat + FromFloat,
 {
   type Output = Output;
-  
+
   fn calculate(&mut self, input: PV) -> Output {
     match self.kp_entry.get() {
       Some(Ok(kp)) => { self.pid.kp = FromFloat::from_f64(kp); },
@@ -246,6 +248,7 @@ where
     if let Some(last) = self.pid.last() {
       self.setpoint_pub.set(last.setpoint.to_f64()).ok();
       self.error_pub.set(last.error.to_f64()).ok();
+      self.pv_pub.set(last.process_variable.to_f64()).ok();
       self.integral_sum_pub.set(last.integral_sum.to_f64()).ok();
       self.output_pub.set(last.output.to_f64()).ok();
     }
