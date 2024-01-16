@@ -1,18 +1,17 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Neg};
 
 pub mod binary;
+pub mod diff;
 pub mod feedforward;
 pub mod linear;
 pub mod pid;
 pub mod predictive;
 
-// TODO: Can we use Filters for Actuators and Sensors? Instead of a bunch of classes?
-
 pub trait Filter<I> {
   type Output;
 
   fn calculate(&mut self, input: I) -> Self::Output;
-  fn reset(&mut self);
+  fn reset(&mut self) { }
 }
 
 pub trait HasSetpoint<SP> {
@@ -32,8 +31,43 @@ impl<T> Filter<T> for IdentityFilter<T> {
   fn calculate(&mut self, input: T) -> T {
     input
   }
+}
 
-  fn reset(&mut self) { }
+pub struct InvertingFilter<T> {
+  phantom: PhantomData<T>
+}
+
+impl<T> InvertingFilter<T> {
+  pub fn new() -> Self { Self { phantom: PhantomData } }
+}
+
+impl<T: Neg> Filter<T> for InvertingFilter<T> {
+  type Output = <T as Neg>::Output;
+
+  fn calculate(&mut self, input: T) -> Self::Output {
+    -input
+  }
+}
+
+pub struct ClampingFilter<T> {
+  pub min: T,
+  pub max: T
+}
+
+impl<T> ClampingFilter<T> {
+  pub fn new(min: T, max: T) -> Self { Self { min, max } }
+}
+
+impl<T: PartialOrd<T> + Copy> Filter<T> for ClampingFilter<T> {
+  type Output = T;
+
+  fn calculate(&mut self, input: T) -> Self::Output {
+    match input {
+      input if input < self.min => self.min,
+      input if input > self.max => self.max,
+      input => input
+    }
+  }
 }
 
 pub struct ChainedFiltersA<A, B, I> {

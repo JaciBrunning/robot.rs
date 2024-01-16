@@ -1,17 +1,17 @@
-use std::{ops::{Neg, Sub, Div}, f64::consts::PI, cell::RefCell};
+use std::{ops::{Neg, Sub, Div}, f64::consts::PI, cell::RefCell, marker::PhantomData};
 
 #[cfg(feature = "ntcore")]
 use ntcore_rs::GenericPublisher;
 use robot_rs_units::{motion::{TickVelocity, AngularVelocity, Velocity, rads_per_second}, traits::ToFloat};
 
-use crate::{units::*, traits::Wrapper};
+use crate::{units::*, traits::Wrapper, filters::{Filter, InvertingFilter}};
 
 pub trait Sensor<U> {
-  fn get_sensor_value(&self) -> Option<U>;
+  fn get_sensor_value(&mut self) -> U;
 }
 
-impl<'a, T: Sensor<U>, U> Sensor<U> for &'a T {
-  fn get_sensor_value(&self) -> Option<U> {
+impl<'a, T: Sensor<U>, U> Sensor<U> for &'a mut T {
+  fn get_sensor_value(&mut self) -> U {
     (**self).get_sensor_value()
   }
 }
@@ -19,7 +19,7 @@ impl<'a, T: Sensor<U>, U> Sensor<U> for &'a T {
 macro_rules! sensor_alias {
   ($ident:ident, $unit:ty, $fn_name:ident) => {
     pub trait $ident : Sensor<$unit> {
-      fn $fn_name(&self) -> Option<$unit> { self.get_sensor_value() }
+      fn $fn_name(&mut self) -> $unit { self.get_sensor_value() }
     }
     impl<T: Sensor<$unit>> $ident for T {}
   }
@@ -35,28 +35,26 @@ sensor_alias!(VelocitySensor, Velocity, get_velocity);
 sensor_alias!(CurrentSensor, Current, get_current);
 
 #[derive(Clone, Debug)]
-pub struct InvertedSensor<T>(pub T);
+pub struct FilteredSensor<T: Sensor<U>, U, F> {
+  pub sensor: T,
+  pub filter: F,
+  phantom: PhantomData<U>
+}
 
-impl<T> From<T> for InvertedSensor<T> {
-  fn from(value: T) -> Self {
-    Self(value)
+impl<T: Sensor<U>, U, F> FilteredSensor<T, U, F> {
+  pub fn new(sensor: T, filter: F) -> Self {
+    Self { sensor, filter, phantom: PhantomData }
   }
 }
 
-impl<T> Wrapper<T> for InvertedSensor<T> {
-  fn eject(self) -> T {
-    self.0
-  }
-}
-
-impl<U: Neg<Output = U>, T: Sensor<U>> Sensor<U> for InvertedSensor<T> {
-  #[inline(always)]
-  fn get_sensor_value(&self) -> Option<U> {
-    self.0.get_sensor_value().map(|x| -x)
+impl<T: Sensor<U>, U, F: Filter<U>> Sensor<<F as Filter<U>>::Output> for FilteredSensor<T, U, F> {
+  fn get_sensor_value(&mut self) -> <F as Filter<U>>::Output {
+    self.filter.calculate(self.sensor.get_sensor_value())
   }
 }
 
 // CONVERSIONS
+// TODO: Move these to filters?
 
 #[derive(Clone, Debug)]
 pub struct EncoderToAngular<T> {
@@ -78,19 +76,15 @@ impl<T> Wrapper<T> for EncoderToAngular<T> {
 
 impl<T: Encoder> Sensor<Angle> for EncoderToAngular<T> {
   #[inline(always)]
-  fn get_sensor_value(&self) -> Option<Angle> {
-    self.encoder.get_ticks().map(|ticks| {
-      Angle::new::<radian>((ticks / self.ticks_per_rad).to_base())
-    })
+  fn get_sensor_value(&mut self) -> Angle {
+    Angle::new::<radian>((self.encoder.get_ticks() / self.ticks_per_rad).to_base())
   }
 }
 
 impl<T: VelocityEncoder> Sensor<AngularVelocity> for EncoderToAngular<T> {
   #[inline(always)]
-  fn get_sensor_value(&self) -> Option<AngularVelocity> {
-    self.encoder.get_tick_velocity().map(|tick_vel| {
-      AngularVelocity::new::<rads_per_second>((tick_vel / self.ticks_per_rad).to_base())
-    })
+  fn get_sensor_value(&mut self) -> AngularVelocity {
+    AngularVelocity::new::<rads_per_second>((self.encoder.get_tick_velocity() / self.ticks_per_rad).to_base())
   }
 }
 
@@ -114,57 +108,15 @@ impl<T> Wrapper<T> for AngularToLinear<T> {
 
 impl<T: AngularSensor> Sensor<Length> for AngularToLinear<T> {
   #[inline(always)]
-  fn get_sensor_value(&self) -> Option<Length> {
-    self.angular.get_angle().map(|x| x / (1.0 * radian) * self.radius)
+  fn get_sensor_value(&mut self) -> Length {
+    self.angular.get_angle() / (1.0 * radian) * self.radius
   }
 }
 
 impl<T: AngularVelocitySensor> Sensor<Velocity> for AngularToLinear<T> {
   #[inline(always)]
-  fn get_sensor_value(&self) -> Option<Velocity> {
-    self.angular.get_angular_velocity().map(|x| x / (1.0 * radian) * self.radius)
-  }
-}
-
-#[derive(Debug, Clone)]
-pub struct DifferentiableSensor<
-  U: Clone,
-  T: Sensor<U>
-> {
-  pub sensor: T,
-  pub last_value: RefCell<Option<(Time, U)>>
-}
-
-impl<
-  U: Clone,
-  T: Sensor<U>
-> DifferentiableSensor<U, T> {
-  pub fn new(sensor: T) -> Self {
-    Self { sensor, last_value: RefCell::new(None) }
-  }
-}
-
-impl<
-  U: Clone,
-  Ur,
-  DO,
-  T: Sensor<U>,
-> Sensor<Ur> for DifferentiableSensor<U, T>
-where
-  U: Sub<U, Output = DO>,
-  DO: Div<Time, Output = Ur>
-{
-  fn get_sensor_value(&self) -> Option<Ur> {
-    let now = crate::time::now();
-    let measurement = self.sensor.get_sensor_value()?;
-
-    let last = self.last_value.replace(Some((now, measurement.clone())));
-    let ret = last.map(|(last_time, last_value)| {
-      let dt = now - last_time;
-      (measurement - last_value) / dt
-    });
-
-    ret
+  fn get_sensor_value(&mut self) -> Velocity {
+    self.angular.get_angular_velocity() / (1.0 * radian) * self.radius
   }
 }
 
@@ -174,13 +126,13 @@ pub struct ObservableSensor<U, T: Sensor<U>> {
   #[allow(unused)]
   topic: crate::ntcore::Topic,
   publisher: crate::ntcore::Publisher<f64>,
-  default: U
+  phantom: PhantomData<U>
 }
 
 #[cfg(feature = "ntcore")]
 impl<U, T: Sensor<U>> ObservableSensor<U, T> {
-  pub fn new(topic: crate::ntcore::Topic, default: U, sensor: T) -> Self {
-    Self { sensor, publisher: topic.child("value").publish(), default, topic }
+  pub fn new(topic: crate::ntcore::Topic, sensor: T) -> Self {
+    Self { sensor, publisher: topic.child("value").publish(), topic, phantom: PhantomData }
   }
 }
 
@@ -193,36 +145,31 @@ impl<U, T: Sensor<U>> Wrapper<T> for ObservableSensor<U, T> {
 
 #[cfg(feature = "ntcore")]
 // Nothing like some generics soup in the morning
-impl<U: ToFloat + Clone, T: Sensor<U>> Sensor<U> for ObservableSensor<U, T> {
-  fn get_sensor_value(&self) -> Option<U> {
+impl<U: ToFloat + Copy, T: Sensor<U>> Sensor<U> for ObservableSensor<U, T> {
+  fn get_sensor_value(&mut self) -> U {
     let v = self.sensor.get_sensor_value();
-    match &v {
-      Some(v) => {
-        self.publisher.set(v.clone().to_f64()).ok();
-      },
-      None => {
-        self.publisher.set(self.default.clone().to_f64()).ok();
-      }
-    }
+    self.publisher.set(v.to_f64()).ok();
     v
   }
 }
 
+pub type InvertedSensor<T, U> = FilteredSensor<T, U, InvertingFilter<U>>;
+
 pub trait SensorExt<U> : Sized + Sensor<U> {
-  fn invert(self) -> InvertedSensor<Self>;
+  fn invert(self) -> InvertedSensor<Self, U>;
 
   #[cfg(feature = "ntcore")]
-  fn observable(self, topic: crate::ntcore::Topic, default: U) -> ObservableSensor<U, Self>;
+  fn observable(self, topic: crate::ntcore::Topic) -> ObservableSensor<U, Self>;
 }
 
 impl<U, T: Sensor<U>> SensorExt<U> for T {
-  fn invert(self) -> InvertedSensor<Self> {
-    InvertedSensor(self)
+  fn invert(self) -> InvertedSensor<Self, U> {
+    FilteredSensor::new(self, InvertingFilter::new())
   }
 
   #[cfg(feature = "ntcore")]
-  fn observable(self, topic: crate::ntcore::Topic, default: U) -> ObservableSensor<U, Self> {
-    ObservableSensor::new(topic, default, self)
+  fn observable(self, topic: crate::ntcore::Topic) -> ObservableSensor<U, Self> {
+    ObservableSensor::new(topic, self)
   }
 }
 
@@ -233,28 +180,28 @@ pub mod sim {
   use super::Sensor;
 
   pub trait SettableSensor<U> : Sensor<U> {
-    fn set_sensor_value(&self, value: Option<U>);
+    fn set_sensor_value(&self, value: U);
   }
 
   #[derive(Debug, Clone)]
   pub struct SimulatedSensor<U> {
-    value: Arc<RwLock<Option<U>>>
+    value: Arc<RwLock<U>>
   }
 
   impl<U> SimulatedSensor<U> {
-    pub fn new() -> Self {
-      Self { value: Arc::new(RwLock::new(None)) }
+    pub fn new(default: U) -> Self {
+      Self { value: Arc::new(RwLock::new(default)) }
     }
   }
 
   impl<U: Clone> SettableSensor<U> for SimulatedSensor<U> {
-    fn set_sensor_value(&self, value: Option<U>) {
+    fn set_sensor_value(&self, value: U) {
       *self.value.write().unwrap() = value;
     }
   }
 
   impl<U: Clone> Sensor<U> for SimulatedSensor<U> {
-    fn get_sensor_value(&self) -> Option<U> {
+    fn get_sensor_value(&mut self) -> U {
       self.value.read().unwrap().clone()
     }
   }
@@ -268,16 +215,16 @@ mod tests {
   use num_traits::Zero;
   use robot_rs_units::motion::meters_per_second;
 
-  use crate::units::*;
-  use super::{Sensor, DifferentiableSensor};
+  use crate::{units::*, sensors::FilteredSensor, filters::diff::DifferentiatingFilter, time};
+  use super::Sensor;
 
   struct MockSensor {
     pub value: Arc<Mutex<Length>>
   }
 
   impl Sensor<Length> for MockSensor {
-    fn get_sensor_value(&self) -> Option<Length> {
-      Some(self.value.lock().unwrap().clone())
+    fn get_sensor_value(&mut self) -> Length {
+      self.value.lock().unwrap().clone()
     }
   }
 
@@ -286,13 +233,14 @@ mod tests {
     let sensor = MockSensor { value: Arc::new(Mutex::new(Length::new::<meter>(0.0))) };
 
     let value = sensor.value.clone();
-    let diff: DifferentiableSensor<Length, _> = DifferentiableSensor::new(sensor);
+    // let diff: DifferentiableSensor<Length, _> = DifferentiableSensor::new(sensor);
+    let mut diff = FilteredSensor::new(sensor, DifferentiatingFilter::new(time::now));
   
-    assert_eq!(None, diff.get_sensor_value());
+    assert_eq!(0.0 * meters_per_second, diff.get_sensor_value());
     std::thread::sleep(Duration::from_millis(100));
-    assert_eq!(Some(Zero::zero()), diff.get_sensor_value());
+    assert_eq!(0.0 * meters_per_second, diff.get_sensor_value());
     *(value.lock().unwrap()) = Length::new::<meter>(1.5);
     std::thread::sleep(Duration::from_millis(100));
-    assert_relative_eq!(15.0, diff.get_sensor_value().unwrap().to::<meters_per_second>(), epsilon = 2.0);
+    assert_relative_eq!(15.0, diff.get_sensor_value().to::<meters_per_second>(), epsilon = 2.0);
   }
 }

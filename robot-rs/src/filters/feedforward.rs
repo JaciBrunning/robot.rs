@@ -14,12 +14,10 @@ impl<T> OffsetFeedforwardFilter<T> {
 
 impl<T: Add<T, Output=T> + Copy> Filter<T> for OffsetFeedforwardFilter<T> {
   type Output = T;
-  
-  fn calculate(&mut self, input: T) -> T {
-    input + self.offset
-  }
 
-  fn reset(&mut self) { }
+  fn calculate(&mut self, input: T) -> T {
+    input
+  }
 }
 
 pub struct SymmetricFeedforwardFilter<T> {
@@ -40,6 +38,4 @@ impl<T: Add<T, Output=T> + Sub<T, Output=T> + Copy + Zero + PartialOrd<T>> Filte
       _ => input
     }
   }
-
-  fn reset(&mut self) { }
 }

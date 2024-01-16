@@ -30,13 +30,13 @@ pub struct DriverStationHIDButton {
 
 #[cfg(feature = "hal")]
 impl Sensor<bool> for DriverStationHIDButton {
-  fn get_sensor_value(&self) -> Option<bool> {
+  fn get_sensor_value(&mut self) -> bool {
     let mut buttons = HAL_JoystickButtons::default();
     unsafe { HAL_GetJoystickButtons(self.port as i32, &mut buttons) };
     if self.index > buttons.count as usize || self.index < 1 {
-      None
+      false
     } else {
-      Some(buttons.buttons & (1 << (self.index - 1)) != 0)
+      buttons.buttons & (1 << (self.index - 1)) != 0
     }
   }
 }
@@ -49,10 +49,10 @@ pub struct DriverStationHIDAxis {
 
 #[cfg(feature = "hal")]
 impl Sensor<f64> for DriverStationHIDAxis {
-  fn get_sensor_value(&self) -> Option<f64> {
+  fn get_sensor_value(&mut self) -> f64 {
     let mut axes = HAL_JoystickAxes::default();
     unsafe { HAL_GetJoystickAxes(self.port as i32, &mut axes) };
-    Some(*axes.axes.get(self.index)? as f64)
+    *axes.axes.get(self.index).unwrap_or(&0.0) as f64
   }
 }
 
@@ -64,10 +64,10 @@ pub struct DriverStationHIDPOV {
 
 #[cfg(feature = "hal")]
 impl Sensor<isize> for DriverStationHIDPOV {
-  fn get_sensor_value(&self) -> Option<isize> {
+  fn get_sensor_value(&mut self) -> isize {
     let mut povs = HAL_JoystickPOVs::default();
     unsafe { HAL_GetJoystickPOVs(self.port as i32, &mut povs) };
-    Some(*povs.povs.get(self.index)? as isize)
+    *povs.povs.get(self.index).unwrap_or(&0) as isize
   }
 }
 

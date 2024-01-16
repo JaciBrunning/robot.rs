@@ -2,105 +2,59 @@
 pub mod pwm;
 
 use std::marker::PhantomData;
-use std::ops::Neg;
 
 #[cfg(feature = "ntcore")]
 use ntcore_rs::GenericPublisher;
-use robot_rs_units::QuantityBase;
-use robot_rs_units::traits::{MaybeUnitNumber, ToFloat};
+use robot_rs_units::traits::ToFloat;
 
+use crate::filters::{Filter, InvertingFilter, ClampingFilter};
 use crate::traits::Wrapper;
 use crate::units::electrical::Voltage;
 
 pub trait Actuator<U> {
   fn set_actuator_value(&mut self, value: U);
-  fn get_set_actuator_value(&self) -> U;
 }
 
 impl<'a, T: Actuator<U>, U> Actuator<U> for &'a mut T {
   fn set_actuator_value(&mut self, value: U) {
     (**self).set_actuator_value(value)
   }
-
-  fn get_set_actuator_value(&self) -> U {
-    (**self).get_set_actuator_value()
-  }
 }
 
 macro_rules! actuator_alias {
-  ($ident:ident, $unit:ty, $setter_name:ident, $getter_name:ident) => {
+  ($ident:ident, $unit:ty, $setter_name:ident) => {
     pub trait $ident : Actuator<$unit> {
       fn $setter_name(&mut self, value: $unit) { self.set_actuator_value(value) }
-      fn $getter_name(&self) -> $unit { self.get_set_actuator_value() }
     }
     impl<T: Actuator<$unit>> $ident for T {}
   }
 }
 
-actuator_alias!(VoltageActuator, Voltage, set_voltage, get_set_voltage);
+actuator_alias!(VoltageActuator, Voltage, set_voltage);
 
 #[derive(Debug, Clone)]
-pub struct InvertedActuator<T: Actuator<U>, U> {
-  actuator: T,
-  value_type: PhantomData<U>
+pub struct FilteredActuator<T: Actuator<U>, U, F, I> {
+  pub actuator: T,
+  pub filter: F,
+  phantom: PhantomData<(U, I)>
 }
 
-impl<T: Actuator<U>, U> From<T> for InvertedActuator<T, U> {
-  fn from(value: T) -> Self {
-    Self { actuator: value, value_type: PhantomData }
+impl<T: Actuator<U>, U, F, I> FilteredActuator<T, U, F, I> {
+  pub fn new(actuator: T, filter: F) -> Self {
+    Self {
+      actuator, filter, phantom: PhantomData
+    }
   }
 }
 
-impl<T: Actuator<U>, U> Wrapper<T> for InvertedActuator<T, U> {
-  fn eject(self) -> T { self.actuator }
-}
-
-impl<T: Actuator<U>, U: Neg<Output = U>> Actuator<U> for InvertedActuator<T, U> {
-  #[inline(always)]
-  fn set_actuator_value(&mut self, demand: U) {
-    self.actuator.set_actuator_value(-demand);
-  }
-
-  #[inline(always)]
-  fn get_set_actuator_value(&self) -> U {
-    -self.actuator.get_set_actuator_value()
+impl<T: Actuator<U>, U, F: Filter<I, Output=U>, I> Actuator<I> for FilteredActuator<T, U, F, I> {
+  fn set_actuator_value(&mut self, value: I) {
+    self.actuator.set_actuator_value(self.filter.calculate(value))
   }
 }
 
-#[derive(Debug, Clone)]
-pub struct ClampedActuator<T: Actuator<U>, U> {
-  actuator: T,
-  min: U,
-  max: U,
-}
-
-impl<T: Actuator<U>, U> ClampedActuator<T, U> {
-  pub fn new(min: U, max: U, act: T) -> Self {
-    Self { actuator: act, min, max }
-  }
-}
-
-impl<T: Actuator<U>, U> Wrapper<T> for ClampedActuator<T, U> {
-  fn eject(self) -> T {
-    self.actuator
-  }
-}
-
-impl<T: Actuator<U>, U: PartialOrd<U> + Clone> Actuator<U> for ClampedActuator<T, U> {
-  #[inline(always)]
-  fn set_actuator_value(&mut self, demand: U) {
-    self.actuator.set_actuator_value(match demand {
-      d if d > self.max => self.max.clone(),
-      d if d < self.min => self.min.clone(),
-      d => d
-    })
-  }
-
-  #[inline(always)]
-  fn get_set_actuator_value(&self) -> U {
-    self.actuator.get_set_actuator_value()
-  }
-}
+pub type InvertedActuator<T, U> = FilteredActuator<T, U, InvertingFilter<U>, U>;
+pub type ClampedActuator<T, U> = FilteredActuator<T, U, ClampingFilter<U>, U>;
 
 #[cfg(feature = "ntcore")]
 pub struct ObservableActuator<T: Actuator<U>, U> {
@@ -132,11 +86,6 @@ impl<T: Actuator<U>, U: ToFloat + Copy> Actuator<U> for ObservableActuator<T, U>
     self.actuator.set_actuator_value(demand);
     self.publisher.set(demand.to_f64()).ok();
   }
-
-  #[inline(always)]
-  fn get_set_actuator_value(&self) -> U {
-    self.actuator.get_set_actuator_value()
-  }
 }
 
 pub trait ActuatorExt<U> : Sized + Actuator<U> {
@@ -149,11 +98,11 @@ pub trait ActuatorExt<U> : Sized + Actuator<U> {
 
 impl<T: Actuator<U>, U> ActuatorExt<U> for T {
   fn invert(self) -> InvertedActuator<Self, U> {
-    InvertedActuator::from(self)
+    FilteredActuator::new(self, InvertingFilter::new())
   }
 
   fn clamp(self, min: U, max: U) -> ClampedActuator<Self, U> {
-    ClampedActuator::new(min, max, self)
+    FilteredActuator::new(self, ClampingFilter::new(min, max))
   }
 
   #[cfg(feature = "ntcore")]
@@ -182,10 +131,6 @@ pub mod sim {
   impl<U: Clone> Actuator<U> for SimulatedActuator<U> {
     fn set_actuator_value(&mut self, demand: U) {
       *self.demand.write().unwrap() = demand;
-    }
-
-    fn get_set_actuator_value(&self) -> U {
-      self.demand.read().unwrap().clone()
     }
   }
 }
