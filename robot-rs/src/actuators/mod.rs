@@ -1,173 +1,164 @@
 #[cfg(feature = "hal")]
 pub mod pwm;
 
+use std::marker::PhantomData;
+use std::ops::Neg;
+
 #[cfg(feature = "ntcore")]
 use ntcore_rs::GenericPublisher;
 use robot_rs_units::QuantityBase;
-use robot_rs_units::traits::MaybeUnitNumber;
+use robot_rs_units::traits::{MaybeUnitNumber, ToFloat};
 
 use crate::traits::Wrapper;
 use crate::units::electrical::Voltage;
 
-pub trait VoltageController {
-  fn set_voltage(&mut self, voltage: Voltage);
-  fn get_set_voltage(&self) -> Voltage;
+pub trait Actuator<U> {
+  fn set_actuator_value(&mut self, value: U);
+  fn get_set_actuator_value(&self) -> U;
 }
 
-impl<'a, T: VoltageController> VoltageController for &'a mut T {
-  fn set_voltage(&mut self, voltage: Voltage) {
-    (**self).set_voltage(voltage)
+impl<'a, T: Actuator<U>, U> Actuator<U> for &'a mut T {
+  fn set_actuator_value(&mut self, value: U) {
+    (**self).set_actuator_value(value)
   }
 
-  fn get_set_voltage(&self) -> Voltage {
-    (**self).get_set_voltage()
+  fn get_set_actuator_value(&self) -> U {
+    (**self).get_set_actuator_value()
   }
 }
 
-pub trait HasBusVoltage {
-  fn get_bus_voltage(&self) -> Voltage;
-}
-
-impl<'a, T: HasBusVoltage> HasBusVoltage for &'a T {
-  fn get_bus_voltage(&self) -> Voltage {
-    (**self).get_bus_voltage()
+macro_rules! actuator_alias {
+  ($ident:ident, $unit:ty, $setter_name:ident, $getter_name:ident) => {
+    pub trait $ident : Actuator<$unit> {
+      fn $setter_name(&mut self, value: $unit) { self.set_actuator_value(value) }
+      fn $getter_name(&self) -> $unit { self.get_set_actuator_value() }
+    }
+    impl<T: Actuator<$unit>> $ident for T {}
   }
 }
+
+actuator_alias!(VoltageActuator, Voltage, set_voltage, get_set_voltage);
 
 #[derive(Debug, Clone)]
-pub struct InvertedVoltageController<T: VoltageController>(pub T);
+pub struct InvertedActuator<T: Actuator<U>, U> {
+  actuator: T,
+  value_type: PhantomData<U>
+}
 
-impl<T: VoltageController> From<T> for InvertedVoltageController<T> {
+impl<T: Actuator<U>, U> From<T> for InvertedActuator<T, U> {
   fn from(value: T) -> Self {
-    Self(value)
+    Self { actuator: value, value_type: PhantomData }
   }
 }
 
-impl<T: VoltageController> Wrapper<T> for InvertedVoltageController<T> {
-  fn eject(self) -> T { self.0 }
+impl<T: Actuator<U>, U> Wrapper<T> for InvertedActuator<T, U> {
+  fn eject(self) -> T { self.actuator }
 }
 
-impl<T: VoltageController> VoltageController for InvertedVoltageController<T> {
+impl<T: Actuator<U>, U: Neg<Output = U>> Actuator<U> for InvertedActuator<T, U> {
   #[inline(always)]
-  fn set_voltage(&mut self, voltage: Voltage) {
-    self.0.set_voltage(-voltage);
+  fn set_actuator_value(&mut self, demand: U) {
+    self.actuator.set_actuator_value(-demand);
   }
 
   #[inline(always)]
-  fn get_set_voltage(&self) -> Voltage {
-    -self.0.get_set_voltage()
-  }
-}
-
-impl<T: VoltageController + HasBusVoltage> HasBusVoltage for InvertedVoltageController<T> {
-  #[inline(always)]
-  fn get_bus_voltage(&self) -> Voltage {
-    self.0.get_bus_voltage()
+  fn get_set_actuator_value(&self) -> U {
+    -self.actuator.get_set_actuator_value()
   }
 }
 
 #[derive(Debug, Clone)]
-pub struct ClampedVoltageController<T: VoltageController> {
-  controller: T,
-  min_voltage: Voltage,
-  max_voltage: Voltage,
+pub struct ClampedActuator<T: Actuator<U>, U> {
+  actuator: T,
+  min: U,
+  max: U,
 }
 
-impl<T: VoltageController> ClampedVoltageController<T> {
-  pub fn new(min_voltage: Voltage, max_voltage: Voltage, vc: T) -> Self {
-    Self { controller: vc, min_voltage, max_voltage }
+impl<T: Actuator<U>, U> ClampedActuator<T, U> {
+  pub fn new(min: U, max: U, act: T) -> Self {
+    Self { actuator: act, min, max }
   }
 }
 
-impl<T: VoltageController> Wrapper<T> for ClampedVoltageController<T> {
+impl<T: Actuator<U>, U> Wrapper<T> for ClampedActuator<T, U> {
   fn eject(self) -> T {
-    self.controller
+    self.actuator
   }
 }
 
-impl<T: VoltageController> VoltageController for ClampedVoltageController<T> {
+impl<T: Actuator<U>, U: PartialOrd<U> + Clone> Actuator<U> for ClampedActuator<T, U> {
   #[inline(always)]
-  fn set_voltage(&mut self, voltage: Voltage) {
-    self.controller.set_voltage(voltage.max(self.min_voltage).min(self.max_voltage))
+  fn set_actuator_value(&mut self, demand: U) {
+    self.actuator.set_actuator_value(match demand {
+      d if d > self.max => self.max.clone(),
+      d if d < self.min => self.min.clone(),
+      d => d
+    })
   }
 
   #[inline(always)]
-  fn get_set_voltage(&self) -> Voltage {
-    self.controller.get_set_voltage()
-  }
-}
-
-impl<T: VoltageController + HasBusVoltage> HasBusVoltage for ClampedVoltageController<T> {
-  #[inline(always)]
-  fn get_bus_voltage(&self) -> Voltage {
-    self.controller.get_bus_voltage()
+  fn get_set_actuator_value(&self) -> U {
+    self.actuator.get_set_actuator_value()
   }
 }
 
 #[cfg(feature = "ntcore")]
-pub struct ObservableVoltageController<T: VoltageController> {
-  controller: T,
+pub struct ObservableActuator<T: Actuator<U>, U> {
+  actuator: T,
   #[allow(unused)]
   topic: crate::ntcore::Topic,
-  publisher: crate::ntcore::Publisher<f64>
+  publisher: crate::ntcore::Publisher<f64>,
+  value_type: PhantomData<U>
 }
 
 #[cfg(feature = "ntcore")]
-impl<T: VoltageController> ObservableVoltageController<T> {
-  pub fn new(topic: crate::ntcore::Topic, vc: T) -> Self {
-    Self { controller: vc, publisher: topic.child("voltage").publish(), topic }
+impl<T: Actuator<U>, U> ObservableActuator<T, U> {
+  pub fn new(topic: crate::ntcore::Topic, act: T) -> Self {
+    Self { actuator: act, publisher: topic.child("value").publish(), topic, value_type: PhantomData }
   }
 }
 
 #[cfg(feature = "ntcore")]
-impl<T: VoltageController> Wrapper<T> for ObservableVoltageController<T> {
+impl<T: Actuator<U>, U> Wrapper<T> for ObservableActuator<T, U> {
   fn eject(self) -> T {
-    self.controller
+    self.actuator
   }
 }
 
 #[cfg(feature = "ntcore")]
-impl<T: VoltageController> VoltageController for ObservableVoltageController<T> {
+impl<T: Actuator<U>, U: ToFloat + Copy> Actuator<U> for ObservableActuator<T, U> {
   #[inline(always)]
-  fn set_voltage(&mut self, voltage: Voltage) {
-    self.controller.set_voltage(voltage);
-    self.publisher.set(voltage.to_base()).ok();
+  fn set_actuator_value(&mut self, demand: U) {
+    self.actuator.set_actuator_value(demand);
+    self.publisher.set(demand.to_f64()).ok();
   }
 
   #[inline(always)]
-  fn get_set_voltage(&self) -> Voltage {
-    self.controller.get_set_voltage()
-  }
-}
-
-#[cfg(feature = "ntcore")]
-impl<T: VoltageController + HasBusVoltage> HasBusVoltage for ObservableVoltageController<T> {
-  #[inline(always)]
-  fn get_bus_voltage(&self) -> Voltage {
-    self.controller.get_bus_voltage()
+  fn get_set_actuator_value(&self) -> U {
+    self.actuator.get_set_actuator_value()
   }
 }
 
-pub trait VoltageControllerExt : Sized + VoltageController {
-  fn invert(self) -> InvertedVoltageController<Self>;
-  fn clamp(self, min_voltage: Voltage, max_voltage: Voltage) -> ClampedVoltageController<Self>;
+pub trait ActuatorExt<U> : Sized + Actuator<U> {
+  fn invert(self) -> InvertedActuator<Self, U>;
+  fn clamp(self, min: U, max: U) -> ClampedActuator<Self, U>;
 
   #[cfg(feature = "ntcore")]
-  fn observable(self, topic: crate::ntcore::Topic) -> ObservableVoltageController<Self>;
+  fn observable(self, topic: crate::ntcore::Topic) -> ObservableActuator<Self, U>;
 }
 
-impl<T: VoltageController> VoltageControllerExt for T {
-  fn invert(self) -> InvertedVoltageController<Self> {
-    InvertedVoltageController::from(self)
+impl<T: Actuator<U>, U> ActuatorExt<U> for T {
+  fn invert(self) -> InvertedActuator<Self, U> {
+    InvertedActuator::from(self)
   }
 
-  fn clamp(self, min_voltage: Voltage, max_voltage: Voltage) -> ClampedVoltageController<Self> {
-    ClampedVoltageController::new(min_voltage, max_voltage, self)
+  fn clamp(self, min: U, max: U) -> ClampedActuator<Self, U> {
+    ClampedActuator::new(min, max, self)
   }
 
   #[cfg(feature = "ntcore")]
-  fn observable(self, topic: crate::ntcore::Topic) -> ObservableVoltageController<Self> {
-    ObservableVoltageController::new(topic, self)
+  fn observable(self, topic: crate::ntcore::Topic) -> ObservableActuator<Self, U> {
+    ObservableActuator::new(topic, self)
   }
 }
 
@@ -175,28 +166,26 @@ impl<T: VoltageController> VoltageControllerExt for T {
 pub mod sim {
   use std::sync::{RwLock, Arc};
 
-  use robot_rs_units::electrical::Voltage;
-
-  use super::VoltageController;
+  use super::Actuator;
 
   #[derive(Debug, Clone)]
-  pub struct SimulatedVoltageController {
-    voltage: Arc<RwLock<Voltage>>
+  pub struct SimulatedActuator<U> {
+    demand: Arc<RwLock<U>>
   }
 
-  impl SimulatedVoltageController {
-    pub fn new(initial_voltage: Voltage) -> Self {
-      Self { voltage: Arc::new(RwLock::new(initial_voltage)) }
+  impl<U> SimulatedActuator<U> {
+    pub fn new(initial: U) -> Self {
+      Self { demand: Arc::new(RwLock::new(initial)) }
     }
   }
 
-  impl VoltageController for SimulatedVoltageController {
-    fn set_voltage(&mut self, voltage: Voltage) {
-      *self.voltage.write().unwrap() = voltage;
+  impl<U: Clone> Actuator<U> for SimulatedActuator<U> {
+    fn set_actuator_value(&mut self, demand: U) {
+      *self.demand.write().unwrap() = demand;
     }
 
-    fn get_set_voltage(&self) -> Voltage {
-      self.voltage.read().unwrap().clone()
+    fn get_set_actuator_value(&self) -> U {
+      self.demand.read().unwrap().clone()
     }
   }
 }

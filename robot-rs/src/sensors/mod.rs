@@ -2,7 +2,7 @@ use std::{ops::{Neg, Sub, Div}, f64::consts::PI, cell::RefCell};
 
 #[cfg(feature = "ntcore")]
 use ntcore_rs::GenericPublisher;
-use robot_rs_units::motion::{TickVelocity, AngularVelocity, Velocity, rads_per_second};
+use robot_rs_units::{motion::{TickVelocity, AngularVelocity, Velocity, rads_per_second}, traits::ToFloat};
 
 use crate::{units::*, traits::Wrapper};
 
@@ -193,15 +193,15 @@ impl<U, T: Sensor<U>> Wrapper<T> for ObservableSensor<U, T> {
 
 #[cfg(feature = "ntcore")]
 // Nothing like some generics soup in the morning
-impl<Q: QuantityBase, T: Sensor<Q>> Sensor<Q> for ObservableSensor<Q, T> {
-  fn get_sensor_value(&self) -> Option<Q> {
+impl<U: ToFloat + Clone, T: Sensor<U>> Sensor<U> for ObservableSensor<U, T> {
+  fn get_sensor_value(&self) -> Option<U> {
     let v = self.sensor.get_sensor_value();
     match &v {
       Some(v) => {
-        self.publisher.set((*v).to_base()).ok();
+        self.publisher.set(v.clone().to_f64()).ok();
       },
       None => {
-        self.publisher.set(self.default.to_base()).ok();
+        self.publisher.set(self.default.clone().to_f64()).ok();
       }
     }
     v
@@ -232,6 +232,10 @@ pub mod sim {
 
   use super::Sensor;
 
+  pub trait SettableSensor<U> : Sensor<U> {
+    fn set_sensor_value(&self, value: Option<U>);
+  }
+
   #[derive(Debug, Clone)]
   pub struct SimulatedSensor<U> {
     value: Arc<RwLock<Option<U>>>
@@ -241,8 +245,10 @@ pub mod sim {
     pub fn new() -> Self {
       Self { value: Arc::new(RwLock::new(None)) }
     }
+  }
 
-    pub fn set_sensor_value(&self, value: Option<U>) {
+  impl<U: Clone> SettableSensor<U> for SimulatedSensor<U> {
+    fn set_sensor_value(&self, value: Option<U>) {
       *self.value.write().unwrap() = value;
     }
   }

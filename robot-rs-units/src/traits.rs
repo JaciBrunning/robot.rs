@@ -1,6 +1,6 @@
 use std::ops::{Add, Sub};
 
-use num_traits::{Zero, Float};
+use num_traits::{Zero, Float, ToPrimitive};
 
 use crate::{Dimension, Quantity, QuantityBase};
 
@@ -146,5 +146,27 @@ impl<T: Float> MaybeUnitNumber for T {
 
   fn min(self, other: Self) -> Self {
     T::min(self, other)
+  }
+}
+
+pub trait ToFloat {
+  fn to_f64(self) -> f64;
+}
+
+impl ToFloat for f64 {
+  fn to_f64(self) -> f64 {
+    self
+  }
+}
+
+impl ToFloat for f32 {
+  fn to_f64(self) -> f64 {
+    self as f64
+  }
+}
+
+impl<T: QuantityBase> ToFloat for T {
+  fn to_f64(self) -> f64 {
+    self.to_base()
   }
 }

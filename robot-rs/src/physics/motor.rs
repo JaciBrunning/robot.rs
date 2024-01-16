@@ -1,4 +1,4 @@
-use robot_rs_units::{electrical::Voltage, motion::AngularVelocity, force::Torque, Quantity, ISQ, typenum::{N1, Z0, N2, P2, P1}, Current};
+use robot_rs_units::{electrical::Voltage, motion::{AngularVelocity, Velocity}, force::{Torque, Force}, Quantity, ISQ, typenum::{N1, Z0, N2, P2, P1}, Current, Length, radian};
 
 use crate::traits::Wrapper;
 
@@ -12,11 +12,11 @@ pub trait MotorExtensionTrait : Sized {
   }
 
   fn geared(self, ratio: f64) -> GearedMotor<Self> {
-    GearedMotor::new(self, ratio)
+    GearedMotor::new(ratio, self)
   }
 
   fn multiply(self, n_motors: usize) -> MultiMotor<Self> {
-    MultiMotor::new(self, n_motors)
+    MultiMotor::new(n_motors, self)
   }
 }
 
@@ -32,6 +32,20 @@ pub trait MotorInverseDynamics {
 pub trait MotorCurrentDynamics {
   fn current(&self, torque: Torque) -> Current;
   fn torque(&self, current: Current) -> Torque;
+}
+
+pub trait SpooledMotorForwardDynamics {
+  fn voltage(&self, force: Force, velocity: Velocity) -> Voltage;
+}
+
+pub trait SpooledMotorInverseDynamics {
+  fn velocity(&self, voltage: Voltage, force: Force) -> Velocity;
+  fn force(&self, voltage: Voltage, velocity: Velocity) -> Force;
+}
+
+pub trait SpooledMotorCurrentDynamics {
+  fn current(&self, force: Force) -> Current;
+  fn force(&self, current: Current) -> Force;
 }
 
 #[derive(Clone, Debug)]
@@ -140,7 +154,7 @@ pub struct GearedMotor<T> {
 }
 
 impl<T> GearedMotor<T> {
-  pub fn new(motor: T, ratio: f64) -> Self {
+  pub fn new(ratio: f64, motor: T) -> Self {
     Self { motor, ratio }
   }
 }
@@ -191,7 +205,7 @@ pub struct MultiMotor<T> {
 }
 
 impl<T> MultiMotor<T> {
-  pub fn new(motor: T, n_motors: usize) -> Self {
+  pub fn new(n_motors: usize, motor: T) -> Self {
     Self { motor, n_motors }
   }
 }
@@ -232,6 +246,50 @@ impl<T: MotorCurrentDynamics> MotorCurrentDynamics for MultiMotor<T> {
   #[inline(always)]
   fn torque(&self, current: Current) -> Torque {
     self.motor.torque(current / self.n_motors as f64) * self.n_motors as f64
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct AngularToLinearMotor<T> {
+  pub motor: T,
+  pub spool_radius: Length
+}
+
+impl<T> AngularToLinearMotor<T> {
+  pub fn new(spool_radius: Length, motor: T) -> Self {
+    Self { motor, spool_radius }
+  }
+}
+
+impl<T> Wrapper<T> for AngularToLinearMotor<T> {
+  fn eject(self) -> T {
+    self.motor
+  }
+}
+
+impl<T: MotorForwardDynamics> SpooledMotorForwardDynamics for AngularToLinearMotor<T> {
+  fn voltage(&self, force: Force, velocity: Velocity) -> Voltage {
+    self.motor.voltage(force * self.spool_radius, velocity / self.spool_radius * (1.0 * radian))
+  }
+}
+
+impl<T: MotorInverseDynamics> SpooledMotorInverseDynamics for AngularToLinearMotor<T> {
+  fn velocity(&self, voltage: Voltage, force: Force) -> Velocity {
+    self.motor.speed(voltage, force * self.spool_radius) * self.spool_radius / (1.0 * radian)
+  }
+
+  fn force(&self, voltage: Voltage, velocity: Velocity) -> Force {
+    self.motor.torque(voltage, velocity / self.spool_radius * (1.0 * radian)) / self.spool_radius
+  }
+}
+
+impl<T: MotorCurrentDynamics> SpooledMotorCurrentDynamics for AngularToLinearMotor<T> {
+  fn current(&self, force: Force) -> Current {
+    self.motor.current(force * self.spool_radius)
+  }
+
+  fn force(&self, current: Current) -> Force {
+    self.motor.torque(current) / self.spool_radius
   }
 }
 

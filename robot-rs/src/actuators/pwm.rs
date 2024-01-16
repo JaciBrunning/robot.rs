@@ -5,7 +5,7 @@ use robot_rs_wpilib_sys::{HAL_DigitalHandle, hal_safe_call, HAL_InitializePWMPor
 
 use crate::traits::Wrapper;
 
-use super::{VoltageController, HasBusVoltage};
+use super::Actuator;
 
 pub struct PWM {
   port: usize,
@@ -90,21 +90,17 @@ impl PWMSpeedController {
   }
 }
 
-impl VoltageController for PWMSpeedController {
-  fn set_voltage(&mut self, voltage: Voltage) {
-    self.set_speed((voltage / self.get_bus_voltage()).into())
-  }
+// TODO: Actuator for Ratio and Angle. Voltage will have to be fed by a vbus detector.
 
-  fn get_set_voltage(&self) -> Voltage {
-    self.get_speed() * self.get_bus_voltage()
-  }
-}
+// impl Actuator<Voltage> for PWMSpeedController {
+//   fn set_actuator_value(&mut self, voltage: Voltage) {
+//     self.set_speed((voltage / self.get_bus_voltage()).into())
+//   }
 
-impl HasBusVoltage for PWMSpeedController {
-  fn get_bus_voltage(&self) -> Voltage {
-    Voltage::new::<volt>(hal_safe_call!(HAL_GetVinVoltage()).unwrap())
-  }
-}
+//   fn get_set_actuator_value(&self) -> Voltage {
+//     self.get_speed() * self.get_bus_voltage()
+//   }
+// }
 
 pub struct PWMServoController(PWM);
 
@@ -121,13 +117,13 @@ impl Wrapper<PWM> for PWMServoController {
   fn eject(self) -> PWM { self.0 }
 }
 
-impl PWMSpeedController {
-  pub fn set_position(&mut self, pos: f64) {
-    // Need to clamp for sim reasons
-    hal_safe_call!(HAL_SetPWMPosition(self.handle, pos.clamp(0.0, 1.0))).unwrap();
-  }
+// impl PWMSpeedController {
+//   pub fn set_position(&mut self, pos: f64) {
+//     // Need to clamp for sim reasons
+//     hal_safe_call!(HAL_SetPWMPosition(self.handle, pos.clamp(0.0, 1.0))).unwrap();
+//   }
 
-  pub fn get_position(&self) -> f64 {
-    hal_safe_call!(HAL_GetPWMPosition(self.handle)).unwrap()
-  }
-}
+//   pub fn get_position(&self) -> f64 {
+//     hal_safe_call!(HAL_GetPWMPosition(self.handle)).unwrap()
+//   }
+// }

@@ -1,7 +1,6 @@
-use std::{sync::Arc, pin::Pin, time::Duration};
+use std::{sync::{Arc, RwLock}, pin::Pin, time::Duration};
 
 use futures::Future;
-pub use robot_rs_macros::Systems;
 use tokio::sync::{oneshot, Mutex};
 
 #[macro_export]
@@ -14,10 +13,17 @@ macro_rules! activity_factory {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Priority(pub usize);
 
-pub trait Systems {
-  type Shared;
+#[macro_export]
+macro_rules! system {
+  ($system:expr) => {
+    std::sync::Arc::new(robot_rs::activity::System::new($system))
+  };
+}
 
-  fn shared(self) -> Self::Shared;
+pub type Shared<T> = Arc<RwLock<T>>;
+
+pub fn make_shared<T>(t: T) -> Shared<T> {
+  Arc::new(RwLock::new(t))
 }
 
 pub enum MaybeReferred<T> {

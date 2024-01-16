@@ -6,6 +6,7 @@ use crate::ds::{observe, RobotControlState};
 #[cfg(feature = "hal")]
 use crate::hal::{HAL_Initialize, HAL_SetNotifierThreadPriority, hal_safe_call, HAL_HasMain, HAL_Shutdown, HAL_ExitMain, HAL_RunMain};
 
+#[derive(Clone)]
 pub struct RobotState {
   pub(crate) inner: Arc<AtomicBool>
 }
@@ -40,7 +41,7 @@ macro_rules! robot_main {
 
     #[tokio::main]
     pub async fn async_main(running: RobotState) -> RobotResult {
-      let fut = $func();
+      let fut = $func(running.clone());
 
       tokio::select! {
         result = fut => result,

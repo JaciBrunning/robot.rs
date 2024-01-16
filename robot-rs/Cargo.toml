@@ -29,3 +29,4 @@ robot-rs-build-utils = { path = "../robot-rs-build-utils" }
 [dev-dependencies]
 mockall = "0.12.1"
 tokio = { version = "1.35.1", features = ["full"] }
+tokio-scoped = "0.2.0"
