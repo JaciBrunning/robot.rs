@@ -170,3 +170,25 @@ impl<T: QuantityBase> ToFloat for T {
     self.to_base()
   }
 }
+
+pub trait FromFloat {
+  fn from_f64(value: f64) -> Self;
+}
+
+impl FromFloat for f64 {
+  fn from_f64(value: f64) -> Self {
+    value
+  }
+}
+
+impl FromFloat for f32 {
+  fn from_f64(value: f64) -> Self {
+    value as f32
+  }
+}
+
+impl<T: QuantityBase> FromFloat for T {
+  fn from_f64(value: f64) -> Self {
+    Self::from_base(value)
+  }
+}
