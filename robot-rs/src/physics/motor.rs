@@ -18,6 +18,10 @@ pub trait MotorExtensionTrait : Sized {
   fn multiply(self, n_motors: usize) -> MultiMotor<Self> {
     MultiMotor::new(n_motors, self)
   }
+
+  fn to_linear(self, spool_radius: Length) -> AngularToLinearMotor<Self> {
+    AngularToLinearMotor::new(spool_radius, self)
+  }
 }
 
 pub trait MotorForwardDynamics {
@@ -31,7 +35,7 @@ pub trait MotorInverseDynamics {
 
 pub trait MotorCurrentDynamics {
   fn current(&self, torque: Torque) -> Current;
-  fn torque(&self, current: Current) -> Torque;
+  fn torque_from_current(&self, current: Current) -> Torque;
 }
 
 pub trait SpooledMotorForwardDynamics {
@@ -45,7 +49,7 @@ pub trait SpooledMotorInverseDynamics {
 
 pub trait SpooledMotorCurrentDynamics {
   fn current(&self, force: Force) -> Current;
-  fn force(&self, current: Current) -> Force;
+  fn force_from_current(&self, current: Current) -> Force;
 }
 
 #[derive(Clone, Debug)]
@@ -142,7 +146,7 @@ impl<T> MotorCurrentDynamics for CurrentAwareMotor<T> {
   }
 
   #[inline(always)]
-  fn torque(&self, current: Current) -> Torque {
+  fn torque_from_current(&self, current: Current) -> Torque {
     current / self.ki
   }
 }
@@ -193,8 +197,8 @@ impl<T: MotorCurrentDynamics> MotorCurrentDynamics for GearedMotor<T> {
   }
 
   #[inline(always)]
-  fn torque(&self, current: Current) -> Torque {
-    self.motor.torque(current) * self.ratio
+  fn torque_from_current(&self, current: Current) -> Torque {
+    self.motor.torque_from_current(current) * self.ratio
   }
 }
 
@@ -244,8 +248,8 @@ impl<T: MotorCurrentDynamics> MotorCurrentDynamics for MultiMotor<T> {
   }
 
   #[inline(always)]
-  fn torque(&self, current: Current) -> Torque {
-    self.motor.torque(current / self.n_motors as f64) * self.n_motors as f64
+  fn torque_from_current(&self, current: Current) -> Torque {
+    self.motor.torque_from_current(current / self.n_motors as f64) * self.n_motors as f64
   }
 }
 
@@ -288,8 +292,8 @@ impl<T: MotorCurrentDynamics> SpooledMotorCurrentDynamics for AngularToLinearMot
     self.motor.current(force * self.spool_radius)
   }
 
-  fn force(&self, current: Current) -> Force {
-    self.motor.torque(current) / self.spool_radius
+  fn force_from_current(&self, current: Current) -> Force {
+    self.motor.torque_from_current(current) / self.spool_radius
   }
 }
 

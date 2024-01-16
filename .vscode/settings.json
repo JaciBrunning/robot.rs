@@ -1,0 +1,6 @@
+{
+  "rust-analyzer.inlayHints.maxLength": 25,
+  "rust-analyzer.inlayHints.implicitDrops.enable": false,
+  "rust-analyzer.inlayHints.typeHints.enable": false,
+  "rust-analyzer.inlayHints.typeHints.hideNamedConstructor": false
+}
