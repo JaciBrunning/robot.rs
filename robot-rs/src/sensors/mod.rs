@@ -278,7 +278,7 @@ mod tests {
 
     let value = sensor.value.clone();
     // let diff: DifferentiableSensor<Length, _> = DifferentiableSensor::new(sensor);
-    let mut diff = FilteredSensor::new(sensor, DifferentiatingFilter::new(time::now));
+    let mut diff = FilteredSensor::new(sensor, DifferentiatingFilter::new());
   
     assert_eq!(0.0 * meters_per_second, diff.get_sensor_value());
     std::thread::sleep(Duration::from_millis(100));

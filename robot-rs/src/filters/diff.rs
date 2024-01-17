@@ -9,7 +9,7 @@ pub struct DifferentiatingFilter<U, Time> {
 }
 
 impl<U, Time> DifferentiatingFilter<U, Time> {
-  pub fn new(time_source: fn() -> Time) -> Self {
+  pub fn new() -> Self {
     Self { last_value: None }
   }
 }
