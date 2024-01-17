@@ -1,11 +1,8 @@
 use std::{ops::{Deref, DerefMut}, ffi::CString};
 
-use robot_rs_units::{electrical::{volt, Voltage}, QuantityBase};
-use robot_rs_wpilib_sys::{HAL_DigitalHandle, hal_safe_call, HAL_InitializePWMPort, HAL_GetPort, HAL_SetPWMPeriodScale, HAL_LatchPWMZero, HAL_SetPWMEliminateDeadband, HAL_SetPWMConfigMicroseconds, HAL_SetPWMDisabled, HAL_FreePWMPort, HAL_SetPWMSpeed, HAL_GetPWMSpeed, HAL_SetPWMPosition, HAL_GetPWMPosition, HAL_GetVinVoltage};
+use robot_rs_wpilib_sys::{HAL_DigitalHandle, hal_safe_call, HAL_InitializePWMPort, HAL_GetPort, HAL_SetPWMPeriodScale, HAL_LatchPWMZero, HAL_SetPWMEliminateDeadband, HAL_SetPWMConfigMicroseconds, HAL_SetPWMDisabled, HAL_FreePWMPort, HAL_SetPWMSpeed, HAL_GetPWMSpeed};
 
 use crate::traits::Wrapper;
-
-use super::Actuator;
 
 pub struct PWM {
   port: usize,

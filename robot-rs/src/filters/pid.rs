@@ -4,7 +4,7 @@ use ntcore_rs::{Entry, Publisher, Topic, GenericPublisher, GenericSubscriber};
 use num_traits::Zero;
 use robot_rs_units::traits::{ToFloat, FromFloat};
 
-use super::{Filter, HasSetpoint, StatefulFilter};
+use super::{HasSetpoint, StatefulFilter};
 
 pub type Derivative<PV, Time> = <PV as Div<Time>>::Output;
 pub type Integral<PV, Time> = <PV as Mul<Time>>::Output;

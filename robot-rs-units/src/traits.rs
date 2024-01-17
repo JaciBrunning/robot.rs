@@ -1,6 +1,6 @@
 use std::ops::{Add, Sub};
 
-use num_traits::{Zero, Float, ToPrimitive};
+use num_traits::{Zero, Float};
 
 use crate::{Dimension, Quantity, QuantityBase};
 

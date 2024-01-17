@@ -96,89 +96,118 @@ impl<T: PartialOrd<T> + Copy, Time> Filter<T, Time> for ClampingFilter<T> {
   }
 }
 
-// pub struct ChainedFiltersA<A, B, Time> {
-//   pub a: A,
-//   pub b: B,
-//   phantom: PhantomData<Time>
-// }
+pub struct ChainedFilters<A, B, Time> {
+  pub a: A, 
+  pub b: B,
+  phantom: PhantomData<Time>
+}
 
-// impl<A, B, Time> ChainedFiltersA<A, B, Time> {
-//   pub fn new(a: A, b: B) -> Self {
-//     Self { a, b, phantom: PhantomData }
-//   }
-// }
+impl<A, B, Time> ChainedFilters<A, B, Time> {
+  pub fn new(a: A, b: B) -> Self {
+    Self { a, b, phantom: PhantomData }
+  }
+}
 
-// impl<A, B, I, Time: Copy> Filter<I, Time> for ChainedFiltersA<A, B, Time>
-// where
-//   A: Filter<I, Time>,
-//   B: Filter<<A as Filter<I, Time>>::Output, Time>
-// {
-//   type Output = B::Output;
+impl<A, B, I, Time: Copy> Filter<I, Time> for ChainedFilters<A, B, Time>
+where
+  A: Filter<I, Time>,
+  B: Filter<<A as Filter<I, Time>>::Output, Time>
+{
+  type Output = B::Output;
 
-//   fn calculate(&mut self, input: I, time: Time) -> Self::Output {
-//     self.b.calculate(self.a.calculate(input, time), time)
-//   }
+  fn calculate(&self, input: I, time: Time) -> Self::Output {
+    self.b.calculate(self.a.calculate(input, time), time)
+  }
+}
 
-//   fn reset(&mut self) {
-//     self.a.reset();
-//     self.b.reset();
-//   }
-// }
+pub struct ChainedStatefulFiltersA<A, B, Time> {
+  pub a: A,
+  pub b: B,
+  phantom: PhantomData<Time>
+}
 
-// impl<A, B, I, Time> HasSetpoint<I> for ChainedFiltersA<A, B, Time>
-// where
-//   A: HasSetpoint<I>
-// {
-//   fn set_setpoint(&mut self, sp: I) {
-//     self.a.set_setpoint(sp)
-//   }
-// }
+impl<A, B, Time> ChainedStatefulFiltersA<A, B, Time> {
+  pub fn new(a: A, b: B) -> Self {
+    Self { a, b, phantom: PhantomData }
+  }
+}
 
-// pub struct ChainedFiltersB<A, B, I, Time> {
-//   pub a: A,
-//   pub b: B,
-//   input_type: PhantomData<(I, Time)>
-// }
+impl<A, B, I, Time: Copy> StatefulFilter<I, Time> for ChainedStatefulFiltersA<A, B, Time>
+where
+  A: StatefulFilter<I, Time>,
+  B: StatefulFilter<<A as StatefulFilter<I, Time>>::Output, Time>
+{
+  type Output = B::Output;
 
-// impl<A, B, I, Time> ChainedFiltersB<A, B, I, Time> {
-//   pub fn new(a: A, b: B) -> Self {
-//     Self { a, b, input_type: PhantomData }
-//   }
-// }
+  fn calculate(&mut self, input: I, time: Time) -> Self::Output {
+    self.b.calculate(self.a.calculate(input, time), time)
+  }
 
-// impl<A, B, I, Time: Copy> Filter<I, Time> for ChainedFiltersB<A, B, I, Time>
-// where
-//   A: Filter<I, Time>,
-//   B: Filter<<A as Filter<I, Time>>::Output, Time>
-// {
-//   type Output = B::Output;
+  fn reset(&mut self) {
+    self.a.reset();
+    self.b.reset();
+  }
+}
 
-//   fn calculate(&mut self, input: I, time: Time) -> Self::Output {
-//     self.b.calculate(self.a.calculate(input, time), time)
-//   }
+impl<A, B, I, Time> HasSetpoint<I> for ChainedStatefulFiltersA<A, B, Time>
+where
+  A: HasSetpoint<I>
+{
+  fn set_setpoint(&mut self, sp: I) {
+    self.a.set_setpoint(sp)
+  }
+}
 
-//   fn reset(&mut self) {
-//     self.a.reset();
-//     self.b.reset();
-//   }
-// }
+pub struct ChainedStatefulFiltersB<A, B, I, Time> {
+  pub a: A,
+  pub b: B,
+  input_type: PhantomData<(I, Time)>
+}
 
-// impl<A, B, I, Time> HasSetpoint<<A as Filter<I, Time>>::Output> for ChainedFiltersB<A, B, I, Time>
-// where
-//   A: Filter<I, Time>,
-//   B: HasSetpoint<<A as Filter<I, Time>>::Output>
-// {
-//   fn set_setpoint(&mut self, sp: <A as Filter<I, Time>>::Output) {
-//     self.b.set_setpoint(sp)
-//   }
-// }
+impl<A, B, I, Time> ChainedStatefulFiltersB<A, B, I, Time> {
+  pub fn new(a: A, b: B) -> Self {
+    Self { a, b, input_type: PhantomData }
+  }
+}
+
+impl<A, B, I, Time: Copy> StatefulFilter<I, Time> for ChainedStatefulFiltersB<A, B, I, Time>
+where
+  A: StatefulFilter<I, Time>,
+  B: StatefulFilter<<A as StatefulFilter<I, Time>>::Output, Time>
+{
+  type Output = B::Output;
+
+  fn calculate(&mut self, input: I, time: Time) -> Self::Output {
+    self.b.calculate(self.a.calculate(input, time), time)
+  }
+
+  fn reset(&mut self) {
+    self.a.reset();
+    self.b.reset();
+  }
+}
+
+impl<A, B, I, Time> HasSetpoint<<A as StatefulFilter<I, Time>>::Output> for ChainedStatefulFiltersB<A, B, I, Time>
+where
+  A: StatefulFilter<I, Time>,
+  B: HasSetpoint<<A as StatefulFilter<I, Time>>::Output>
+{
+  fn set_setpoint(&mut self, sp: <A as StatefulFilter<I, Time>>::Output) {
+    self.b.set_setpoint(sp)
+  }
+}
 
 pub trait FilterExt<I, Time> : Filter<I, Time> + Sized {
   fn to_stateful(self) -> StatefulFilterAdapter<Self, I, Time>;
+  fn then<Other: Filter<Self::Output, Time>>(self, other: Other) -> ChainedFilters<Self, Other, Time>;
 }
 
 impl<T: Filter<I, Time>, I, Time> FilterExt<I, Time> for T {
   fn to_stateful(self) -> StatefulFilterAdapter<Self, I, Time> {
     StatefulFilterAdapter::new(self)
+  }
+
+  fn then<Other: Filter<Self::Output, Time>>(self, other: Other) -> ChainedFilters<Self, Other, Time> {
+    ChainedFilters::new(self, other)
   }
 }
