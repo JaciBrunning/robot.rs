@@ -6,6 +6,7 @@ pub mod offset;
 pub mod linear;
 pub mod pid;
 pub mod predictive;
+pub mod stability;
 pub mod transform;
 
 pub trait Transform<I> {
