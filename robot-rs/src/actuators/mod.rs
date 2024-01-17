@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use ntcore_rs::GenericPublisher;
 use robot_rs_units::traits::ToFloat;
 
-use crate::filters::{Filter, InvertingFilter, ClampingFilter};
+use crate::filters::{Filter, InvertingFilter, ClampingFilter, StatefulFilter};
 use crate::traits::Wrapper;
 use crate::units::electrical::Voltage;
 
@@ -47,7 +47,7 @@ impl<T: Actuator<U, Time>, U, F, I, Time> FilteredActuator<T, U, F, I, Time> {
   }
 }
 
-impl<T: Actuator<U, Time>, U, F: Filter<I, Time, Output=U>, I, Time: Copy> Actuator<I, Time> for FilteredActuator<T, U, F, I, Time> {
+impl<T: Actuator<U, Time>, U, F: StatefulFilter<I, Time, Output=U>, I, Time: Copy> Actuator<I, Time> for FilteredActuator<T, U, F, I, Time> {
   fn set_actuator_value(&mut self, value: I, now: Time) {
     self.actuator.set_actuator_value(self.filter.calculate(value, now), now)
   }
@@ -91,7 +91,7 @@ impl<T: Actuator<U, Time>, U: ToFloat + Copy, Time> Actuator<U, Time> for Observ
 pub trait ActuatorExt<U, Time> : Sized + Actuator<U, Time> {
   fn invert(self) -> InvertedActuator<Self, U, Time>;
   fn clamp(self, min: U, max: U) -> ClampedActuator<Self, U, Time>;
-  fn filter<F, I>(self, filter: F) -> FilteredActuator<Self, U, F, I, Time>;
+  fn filter<I, F>(self, filter: F) -> FilteredActuator<Self, U, F, I, Time>;
 
   #[cfg(feature = "ntcore")]
   fn observable(self, topic: crate::ntcore::Topic) -> ObservableActuator<Self, U, Time>;
@@ -106,7 +106,7 @@ impl<T: Actuator<U, Time>, U, Time> ActuatorExt<U, Time> for T {
     FilteredActuator::new(self, ClampingFilter::new(min, max))
   }
 
-  fn filter<F, I>(self, filter: F) -> FilteredActuator<Self, U, F, I, Time> {
+  fn filter<I, F>(self, filter: F) -> FilteredActuator<Self, U, F, I, Time> {
     FilteredActuator::new(self, filter)
   }
 

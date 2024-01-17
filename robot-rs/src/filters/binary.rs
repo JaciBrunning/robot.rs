@@ -1,4 +1,4 @@
-use super::Filter;
+use super::StatefulFilter;
 
 #[derive(Debug, Clone)]
 pub enum Edge {
@@ -22,7 +22,7 @@ impl EdgeFilter {
   }
 }
 
-impl<Time> Filter<bool, Time> for EdgeFilter {
+impl<Time> StatefulFilter<bool, Time> for EdgeFilter {
   type Output = bool;
   
   fn calculate(&mut self, input: bool, _time: Time) -> bool {

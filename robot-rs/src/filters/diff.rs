@@ -2,7 +2,7 @@ use std::ops::{Div, Sub};
 
 use num_traits::Zero;
 
-use super::Filter;
+use super::StatefulFilter;
 
 pub struct DifferentiatingFilter<U, Time> {
   pub last_value: Option<(Time, U)>,
@@ -14,7 +14,7 @@ impl<U, Time> DifferentiatingFilter<U, Time> {
   }
 }
 
-impl<U: Copy + Div<Time> + Sub<U, Output=U>, Time: Copy + Sub<Time, Output=Time>> Filter<U, Time> for DifferentiatingFilter<U, Time>
+impl<U: Copy + Div<Time> + Sub<U, Output=U>, Time: Copy + Sub<Time, Output=Time>> StatefulFilter<U, Time> for DifferentiatingFilter<U, Time>
 where
   <U as Div<Time>>::Output: Zero
 {
@@ -28,5 +28,9 @@ where
     });
 
     ret.unwrap_or(Zero::zero())
+  }
+
+  fn reset(&mut self) {
+    self.last_value = None;
   }
 }

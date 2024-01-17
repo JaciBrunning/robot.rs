@@ -2,21 +2,21 @@ use std::time::Duration;
 
 use ntcore_rs::{NetworkTableInstance, GenericPublisher};
 use num_traits::Zero;
-use robot_rs::{start::{RobotState, RobotResult}, actuators::{ActuatorExt, sim::{SimulatedActuator, ReadableActuator}, VoltageActuator}, sensors::{sim::{SimulatedSensor, SettableSensor}, SensorExt, DisplacementSensor}, robot_main, filters::{pid::PID, Filter, ChainedFiltersA, feedforward::OffsetFeedforwardFilter}, time::now, physics::motor::{from_dyno::KrakenTrap, MotorExtensionTrait, SpooledMotorInverseDynamics, SpooledMotorCurrentDynamics, SpooledMotorForwardDynamics}};
-use robot_rs_units::{electrical::{volt, Voltage}, meter, Length, inch, kilogram, motion::{meters_per_second, meters_per_second2}, millisecond, traits::ToFloat, Time, second};
+use robot_rs::{start::{RobotState, RobotResult}, actuators::{ActuatorExt, sim::{SimulatedActuator, ReadableActuator}, VoltageActuator}, sensors::{sim::{SimulatedSensor, SettableSensor}, SensorExt, DisplacementSensor}, robot_main, filters::{pid::PID, Filter, ChainedFiltersA, feedforward::OffsetFeedforwardFilter, predictive::CurrentLimitFilter, diff::DifferentiatingFilter}, time::now, physics::motor::{from_dyno::KrakenTrap, MotorExtensionTrait, SpooledMotorInverseDynamics, SpooledMotorCurrentDynamics, SpooledMotorForwardDynamics}};
+use robot_rs_units::{electrical::{volt, Voltage}, meter, Length, inch, kilogram, motion::{meters_per_second, meters_per_second2}, millisecond, traits::ToFloat, Time, second, ampere};
 
 fn my_robot(state: RobotState) -> RobotResult {
   let nt = NetworkTableInstance::default();
   let sim_motor = SimulatedActuator::new(0.0 * volt, now());
+  let mut sim_sensor = SimulatedSensor::<Length>::new(0.0 * meter);
+  let motor_model = KrakenTrap().geared(30.0).multiply(2).to_linear(2.0 * inch);
 
   let mut motor = sim_motor.clone()
       .clamp(-12.0 * volt, 12.0 * volt)
       .observable(nt.topic("/motor"));
 
-  let mut sim_sensor = SimulatedSensor::<Length>::new(0.0 * meter);
   let mut sensor = sim_sensor.clone();
 
-  let motor_model = KrakenTrap().geared(30.0).multiply(2).to_linear(2.0 * inch);
   let carriage_mass = 12.0 * kilogram;
 
   let mut control_filter = ChainedFiltersA::new(

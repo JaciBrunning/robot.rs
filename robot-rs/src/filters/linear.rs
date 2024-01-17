@@ -2,7 +2,7 @@ use std::{collections::VecDeque, ops::{Mul, Sub, Add, Div, Neg}};
 
 use num_traits::Zero;
 
-use super::Filter;
+use super::StatefulFilter;
 
 pub struct LinearFilter<GI, GO, I, O> {
   ff_gains: Vec<GI>,
@@ -22,7 +22,7 @@ impl<GI: Clone, GO: Clone, I, O> LinearFilter<GI, GO, I, O> {
   }
 }
 
-impl<GI, GO, I, O, Time> Filter<I, Time> for LinearFilter<GI, GO, I, O>
+impl<GI, GO, I, O, Time> StatefulFilter<I, Time> for LinearFilter<GI, GO, I, O>
 where
   O: Zero,
   GI: Copy,

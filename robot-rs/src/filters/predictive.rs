@@ -4,6 +4,7 @@ use crate::{physics::motor::{MotorCurrentDynamics, MotorForwardDynamics}, sensor
 
 use super::Filter;
 
+#[derive(Clone)]
 pub struct CurrentLimitFilter<Motor, Sensor> {
   pub motor: Motor,
   pub sensor: Sensor,
@@ -24,13 +25,11 @@ impl<
 > Filter<Voltage, Time> for CurrentLimitFilter<Motor, Sensor> {
   type Output = Voltage;
 
-  fn calculate(&mut self, input: Voltage, _time: Time) -> Self::Output {
+  fn calculate(&self, input: Voltage, _time: Time) -> Self::Output {
     let speed = self.sensor.get_angular_velocity();
     let v_min = self.motor.voltage(self.motor.torque_from_current(self.current_min), speed);
     let v_max = self.motor.voltage(self.motor.torque_from_current(self.current_max), speed);
 
     input.max(v_min).min(v_max)
   }
-
-  fn reset(&mut self) { }
 }
