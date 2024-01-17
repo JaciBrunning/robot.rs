@@ -8,11 +8,16 @@ use crate::{units::*, traits::Wrapper, filters::{Filter, InvertingFilter}};
 
 pub trait Sensor<U> {
   fn get_sensor_value(&mut self) -> U;
+  fn get_last_measurement_time(&self) -> Time;
 }
 
 impl<'a, T: Sensor<U>, U> Sensor<U> for &'a mut T {
   fn get_sensor_value(&mut self) -> U {
     (**self).get_sensor_value()
+  }
+
+  fn get_last_measurement_time(&self) -> Time {
+    (**self).get_last_measurement_time()
   }
 }
 
@@ -47,9 +52,13 @@ impl<T: Sensor<U>, U, F> FilteredSensor<T, U, F> {
   }
 }
 
-impl<T: Sensor<U>, U, F: Filter<U>> Sensor<<F as Filter<U>>::Output> for FilteredSensor<T, U, F> {
-  fn get_sensor_value(&mut self) -> <F as Filter<U>>::Output {
-    self.filter.calculate(self.sensor.get_sensor_value())
+impl<T: Sensor<U>, U, F: Filter<U, Time>> Sensor<<F as Filter<U, Time>>::Output> for FilteredSensor<T, U, F> {
+  fn get_sensor_value(&mut self) -> <F as Filter<U, Time>>::Output {
+    self.filter.calculate(self.sensor.get_sensor_value(), self.get_last_measurement_time())
+  }
+
+  fn get_last_measurement_time(&self) -> Time {
+    self.sensor.get_last_measurement_time()
   }
 }
 
@@ -79,12 +88,20 @@ impl<T: Encoder> Sensor<Angle> for EncoderToAngular<T> {
   fn get_sensor_value(&mut self) -> Angle {
     Angle::new::<radian>((self.encoder.get_ticks() / self.ticks_per_rad).to_base())
   }
+
+  fn get_last_measurement_time(&self) -> Time {
+    self.encoder.get_last_measurement_time()
+  }
 }
 
 impl<T: VelocityEncoder> Sensor<AngularVelocity> for EncoderToAngular<T> {
   #[inline(always)]
   fn get_sensor_value(&mut self) -> AngularVelocity {
     AngularVelocity::new::<rads_per_second>((self.encoder.get_tick_velocity() / self.ticks_per_rad).to_base())
+  }
+
+  fn get_last_measurement_time(&self) -> Time {
+    self.encoder.get_last_measurement_time()
   }
 }
 
@@ -111,12 +128,20 @@ impl<T: AngularSensor> Sensor<Length> for AngularToLinear<T> {
   fn get_sensor_value(&mut self) -> Length {
     self.angular.get_angle() / (1.0 * radian) * self.radius
   }
+
+  fn get_last_measurement_time(&self) -> Time {
+    self.angular.get_last_measurement_time()
+  }
 }
 
 impl<T: AngularVelocitySensor> Sensor<Velocity> for AngularToLinear<T> {
   #[inline(always)]
   fn get_sensor_value(&mut self) -> Velocity {
     self.angular.get_angular_velocity() / (1.0 * radian) * self.radius
+  }
+
+  fn get_last_measurement_time(&self) -> Time {
+    self.angular.get_last_measurement_time()
   }
 }
 
@@ -151,6 +176,10 @@ impl<U: ToFloat + Copy, T: Sensor<U>> Sensor<U> for ObservableSensor<U, T> {
     self.publisher.set(v.to_f64()).ok();
     v
   }
+
+  fn get_last_measurement_time(&self) -> Time {
+    self.sensor.get_last_measurement_time()
+  }
 }
 
 pub type InvertedSensor<T, U> = FilteredSensor<T, U, InvertingFilter<U>>;
@@ -182,32 +211,38 @@ impl<U, T: Sensor<U>> SensorExt<U> for T {
 pub mod sim {
   use std::sync::{RwLock, Arc};
 
-  use super::Sensor;
+  use robot_rs_units::Time;
+
+use super::Sensor;
 
   pub trait SettableSensor<U> : Sensor<U> {
-    fn set_sensor_value(&self, value: U);
+    fn set_sensor_value(&self, value: U, time: Time);
   }
 
   #[derive(Debug, Clone)]
   pub struct SimulatedSensor<U> {
-    value: Arc<RwLock<U>>
+    value: Arc<RwLock<(U, Time)>>
   }
 
   impl<U> SimulatedSensor<U> {
     pub fn new(default: U) -> Self {
-      Self { value: Arc::new(RwLock::new(default)) }
+      Self { value: Arc::new(RwLock::new((default, crate::time::now()))) }
     }
   }
 
   impl<U: Clone> SettableSensor<U> for SimulatedSensor<U> {
-    fn set_sensor_value(&self, value: U) {
-      *self.value.write().unwrap() = value;
+    fn set_sensor_value(&self, value: U, time: Time) {
+      *self.value.write().unwrap() = (value, time);
     }
   }
 
   impl<U: Clone> Sensor<U> for SimulatedSensor<U> {
     fn get_sensor_value(&mut self) -> U {
-      self.value.read().unwrap().clone()
+      self.value.read().unwrap().0.clone()
+    }
+
+    fn get_last_measurement_time(&self) -> robot_rs_units::Time {
+      self.value.read().unwrap().1
     }
   }
 }
@@ -230,6 +265,10 @@ mod tests {
   impl Sensor<Length> for MockSensor {
     fn get_sensor_value(&mut self) -> Length {
       self.value.lock().unwrap().clone()
+    }
+
+    fn get_last_measurement_time(&self) -> Time {
+      crate::time::now()
     }
   }
 

@@ -12,10 +12,10 @@ impl<T> OffsetFeedforwardFilter<T> {
   pub fn new(offset: T) -> Self { Self { offset } }
 }
 
-impl<T: Add<T, Output=T> + Copy> Filter<T> for OffsetFeedforwardFilter<T> {
+impl<T: Add<T, Output=T> + Copy, Time> Filter<T, Time> for OffsetFeedforwardFilter<T> {
   type Output = T;
 
-  fn calculate(&mut self, input: T) -> T {
+  fn calculate(&mut self, input: T, _time: Time) -> T {
     input
   }
 }
@@ -28,10 +28,10 @@ impl<T> SymmetricFeedforwardFilter<T> {
   pub fn new(offset: T) -> Self { Self { offset } }
 }
 
-impl<T: Add<T, Output=T> + Sub<T, Output=T> + Copy + Zero + PartialOrd<T>> Filter<T> for SymmetricFeedforwardFilter<T> {
+impl<T: Add<T, Output=T> + Sub<T, Output=T> + Copy + Zero + PartialOrd<T>, Time> Filter<T, Time> for SymmetricFeedforwardFilter<T> {
   type Output = T;
 
-  fn calculate(&mut self, input: T) -> T {
+  fn calculate(&mut self, input: T, _time: Time) -> T {
     match input {
       input if input < Zero::zero() => input - self.offset,
       input if input > Zero::zero() => input + self.offset,

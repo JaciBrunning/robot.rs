@@ -7,10 +7,10 @@ pub mod linear;
 pub mod pid;
 pub mod predictive;
 
-pub trait Filter<I> {
+pub trait Filter<I, Time> {
   type Output;
 
-  fn calculate(&mut self, input: I) -> Self::Output;
+  fn calculate(&mut self, input: I, time: Time) -> Self::Output;
   fn reset(&mut self) { }
 }
 
@@ -26,9 +26,9 @@ impl<T> IdentityFilter<T> {
   pub fn new() -> Self { Self { phantom: PhantomData } }
 }
 
-impl<T> Filter<T> for IdentityFilter<T> {
+impl<T, Time> Filter<T, Time> for IdentityFilter<T> {
   type Output = T;
-  fn calculate(&mut self, input: T) -> T {
+  fn calculate(&mut self, input: T, _time: Time) -> T {
     input
   }
 }
@@ -41,10 +41,10 @@ impl<T> InvertingFilter<T> {
   pub fn new() -> Self { Self { phantom: PhantomData } }
 }
 
-impl<T: Neg> Filter<T> for InvertingFilter<T> {
+impl<T: Neg, Time> Filter<T, Time> for InvertingFilter<T> {
   type Output = <T as Neg>::Output;
 
-  fn calculate(&mut self, input: T) -> Self::Output {
+  fn calculate(&mut self, input: T, _time: Time) -> Self::Output {
     -input
   }
 }
@@ -58,10 +58,10 @@ impl<T> ClampingFilter<T> {
   pub fn new(min: T, max: T) -> Self { Self { min, max } }
 }
 
-impl<T: PartialOrd<T> + Copy> Filter<T> for ClampingFilter<T> {
+impl<T: PartialOrd<T> + Copy, Time> Filter<T, Time> for ClampingFilter<T> {
   type Output = T;
 
-  fn calculate(&mut self, input: T) -> Self::Output {
+  fn calculate(&mut self, input: T, _time: Time) -> Self::Output {
     match input {
       input if input < self.min => self.min,
       input if input > self.max => self.max,
@@ -70,26 +70,27 @@ impl<T: PartialOrd<T> + Copy> Filter<T> for ClampingFilter<T> {
   }
 }
 
-pub struct ChainedFiltersA<A, B> {
+pub struct ChainedFiltersA<A, B, Time> {
   pub a: A,
   pub b: B,
+  phantom: PhantomData<Time>
 }
 
-impl<A, B> ChainedFiltersA<A, B> {
+impl<A, B, Time> ChainedFiltersA<A, B, Time> {
   pub fn new(a: A, b: B) -> Self {
-    Self { a, b }
+    Self { a, b, phantom: PhantomData }
   }
 }
 
-impl<A, B, I> Filter<I> for ChainedFiltersA<A, B>
+impl<A, B, I, Time: Copy> Filter<I, Time> for ChainedFiltersA<A, B, Time>
 where
-  A: Filter<I>,
-  B: Filter<<A as Filter<I>>::Output>
+  A: Filter<I, Time>,
+  B: Filter<<A as Filter<I, Time>>::Output, Time>
 {
   type Output = B::Output;
 
-  fn calculate(&mut self, input: I) -> Self::Output {
-    self.b.calculate(self.a.calculate(input))
+  fn calculate(&mut self, input: I, time: Time) -> Self::Output {
+    self.b.calculate(self.a.calculate(input, time), time)
   }
 
   fn reset(&mut self) {
@@ -98,7 +99,7 @@ where
   }
 }
 
-impl<A, B, I> HasSetpoint<I> for ChainedFiltersA<A, B>
+impl<A, B, I, Time> HasSetpoint<I> for ChainedFiltersA<A, B, Time>
 where
   A: HasSetpoint<I>
 {
@@ -107,27 +108,27 @@ where
   }
 }
 
-pub struct ChainedFiltersB<A, B, I> {
+pub struct ChainedFiltersB<A, B, I, Time> {
   pub a: A,
   pub b: B,
-  input_type: PhantomData<I>
+  input_type: PhantomData<(I, Time)>
 }
 
-impl<A, B, I> ChainedFiltersB<A, B, I> {
+impl<A, B, I, Time> ChainedFiltersB<A, B, I, Time> {
   pub fn new(a: A, b: B) -> Self {
     Self { a, b, input_type: PhantomData }
   }
 }
 
-impl<A, B, I> Filter<I> for ChainedFiltersB<A, B, I>
+impl<A, B, I, Time: Copy> Filter<I, Time> for ChainedFiltersB<A, B, I, Time>
 where
-  A: Filter<I>,
-  B: Filter<<A as Filter<I>>::Output>
+  A: Filter<I, Time>,
+  B: Filter<<A as Filter<I, Time>>::Output, Time>
 {
   type Output = B::Output;
 
-  fn calculate(&mut self, input: I) -> Self::Output {
-    self.b.calculate(self.a.calculate(input))
+  fn calculate(&mut self, input: I, time: Time) -> Self::Output {
+    self.b.calculate(self.a.calculate(input, time), time)
   }
 
   fn reset(&mut self) {
@@ -136,12 +137,12 @@ where
   }
 }
 
-impl<A, B, I> HasSetpoint<<A as Filter<I>>::Output> for ChainedFiltersB<A, B, I>
+impl<A, B, I, Time> HasSetpoint<<A as Filter<I, Time>>::Output> for ChainedFiltersB<A, B, I, Time>
 where
-  A: Filter<I>,
-  B: HasSetpoint<<A as Filter<I>>::Output>
+  A: Filter<I, Time>,
+  B: HasSetpoint<<A as Filter<I, Time>>::Output>
 {
-  fn set_setpoint(&mut self, sp: <A as Filter<I>>::Output) {
+  fn set_setpoint(&mut self, sp: <A as Filter<I, Time>>::Output) {
     self.b.set_setpoint(sp)
   }
 }

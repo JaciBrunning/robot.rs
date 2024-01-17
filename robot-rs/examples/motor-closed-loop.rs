@@ -7,7 +7,7 @@ use robot_rs_units::{electrical::{volt, Voltage}, meter, Length, inch, kilogram,
 
 fn my_robot(state: RobotState) -> RobotResult {
   let nt = NetworkTableInstance::default();
-  let sim_motor = SimulatedActuator::new(0.0 * volt);
+  let sim_motor = SimulatedActuator::new(0.0 * volt, now());
 
   let mut motor = sim_motor.clone()
       .clamp(-12.0 * volt, 12.0 * volt)
@@ -25,8 +25,7 @@ fn my_robot(state: RobotState) -> RobotResult {
       (1.0 * volt) / (0.5 * meter * (1.0 * second)),
       Zero::zero(),
       0.5 * meter,
-      10,
-      robot_rs::time::now
+      10
     ).tunable(nt.topic("/pid")),
     OffsetFeedforwardFilter::new(
       motor_model.voltage(carriage_mass * (9.81 * meters_per_second2), 0.0 * meters_per_second)
@@ -41,10 +40,10 @@ fn my_robot(state: RobotState) -> RobotResult {
     let now = robot_rs::time::now();
     let dt = now - last_time;
 
-    let demand = control_filter.calculate(sensor.get_displacement());
-    motor.set_voltage(demand);
+    let demand = control_filter.calculate(sensor.get_displacement(), now);
+    motor.set_voltage(demand, now);
 
-    let force = motor_model.force(sim_motor.get_actuator_value(), speed);
+    let force = motor_model.force(sim_motor.get_actuator_value().0, speed);
     let current = motor_model.current(force);
     let accel = force / carriage_mass - 9.81 * meters_per_second2;
     speed += accel * dt;
@@ -54,7 +53,7 @@ fn my_robot(state: RobotState) -> RobotResult {
       new_displacement = 0.0 * meter;
       speed = 0.0 * meters_per_second;
     }
-    sim_sensor.set_sensor_value(new_displacement);
+    sim_sensor.set_sensor_value(new_displacement, now);
 
     current_publisher.set(current.to_f64()).ok();
 

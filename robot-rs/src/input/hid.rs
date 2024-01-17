@@ -39,6 +39,10 @@ impl Sensor<bool> for DriverStationHIDButton {
       buttons.buttons & (1 << (self.index - 1)) != 0
     }
   }
+
+  fn get_last_measurement_time(&self) -> robot_rs_units::Time {
+    crate::time::now()
+  }
 }
 
 #[cfg(feature = "hal")]
@@ -54,6 +58,10 @@ impl Sensor<f64> for DriverStationHIDAxis {
     unsafe { HAL_GetJoystickAxes(self.port as i32, &mut axes) };
     *axes.axes.get(self.index).unwrap_or(&0.0) as f64
   }
+
+  fn get_last_measurement_time(&self) -> robot_rs_units::Time {
+    crate::time::now()
+  }
 }
 
 #[cfg(feature = "hal")]
@@ -68,6 +76,10 @@ impl Sensor<isize> for DriverStationHIDPOV {
     let mut povs = HAL_JoystickPOVs::default();
     unsafe { HAL_GetJoystickPOVs(self.port as i32, &mut povs) };
     *povs.povs.get(self.index).unwrap_or(&0) as isize
+  }
+
+  fn get_last_measurement_time(&self) -> robot_rs_units::Time {
+    crate::time::now()
   }
 }
 

@@ -45,7 +45,6 @@ where
   setpoint: PV,
   history: VecDeque<PIDMeasurement<PV, Output, Time>>,
   history_len: usize,
-  get_time: fn() -> Time,
 }
 
 impl<
@@ -56,7 +55,7 @@ impl<
 where
   Integral<PV, Time>: Copy
 {
-  pub fn new(kp: Kp<PV, Output>, ki: Ki<PV, Output, Time>, kd: Kd<PV, Output, Time>, setpoint: PV, history_len: usize, get_time: fn() -> Time) -> Self {
+  pub fn new(kp: Kp<PV, Output>, ki: Ki<PV, Output, Time>, kd: Kd<PV, Output, Time>, setpoint: PV, history_len: usize) -> Self {
     if history_len == 0 {
       panic!("History must be greater than 0");
     }
@@ -66,7 +65,6 @@ where
       setpoint,
       history: VecDeque::with_capacity(history_len),
       history_len,
-      get_time,
     }
   }
 
@@ -96,7 +94,7 @@ impl<
   PV: Mul<Time> + Div<Time> + Copy,
   Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy,
   Time: Sub<Time, Output = Time> + Copy
-> Filter<PV> for PID<PV, Output, Time>
+> Filter<PV, Time> for PID<PV, Output, Time>
 where
   PV: Mul<Kp<PV, Output>, Output = Output> + Sub<PV, Output = PV>,
   Integral<PV, Time>: Copy + Zero + Mul<Ki<PV, Output, Time>, Output = Output>,
@@ -107,8 +105,8 @@ where
 {
   type Output = Output;
 
-  fn calculate(&mut self, input: PV) -> Output {
-    let now = (self.get_time)();
+  fn calculate(&mut self, input: PV, time: Time) -> Output {
+    let now = time;
     let last = self.last();
     let error = self.setpoint - input;
 
@@ -216,7 +214,7 @@ impl<
   PV: Mul<Time> + Div<Time> + Copy + ToFloat,
   Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy + ToFloat,
   Time: Sub<Time, Output = Time> + Copy
-> Filter<PV> for TunablePID<PV, Output, Time>
+> Filter<PV, Time> for TunablePID<PV, Output, Time>
 where
   PV: Mul<Kp<PV, Output>, Output = Output> + Sub<PV, Output = PV>,
   Integral<PV, Time>: Copy + Zero + Mul<Ki<PV, Output, Time>, Output = Output> + ToFloat,
@@ -227,7 +225,7 @@ where
 {
   type Output = Output;
 
-  fn calculate(&mut self, input: PV) -> Output {
+  fn calculate(&mut self, input: PV, time: Time) -> Output {
     match self.kp_entry.get() {
       Some(Ok(kp)) => { self.pid.kp = FromFloat::from_f64(kp); },
       _ => { self.kp_entry.set(self.pid.kp.to_f64()).ok(); },
@@ -243,7 +241,7 @@ where
       _ => { self.kd_entry.set(self.pid.kd.to_f64()).ok(); },
     }
 
-    let output = self.pid.calculate(input);
+    let output = self.pid.calculate(input, time);
 
     if let Some(last) = self.pid.last() {
       self.setpoint_pub.set(last.setpoint.to_f64()).ok();

@@ -1,46 +1,35 @@
-use robot_rs_units::{Current, electrical::Voltage, motion::{AngularVelocity, Velocity}, traits::MaybeUnitNumber};
+use robot_rs_units::{Current, electrical::Voltage, motion::AngularVelocity, traits::MaybeUnitNumber};
 
-use crate::physics::motor::{MotorCurrentDynamics, MotorForwardDynamics, SpooledMotorCurrentDynamics, SpooledMotorForwardDynamics};
+use crate::{physics::motor::{MotorCurrentDynamics, MotorForwardDynamics}, sensors::AngularVelocitySensor};
 
 use super::Filter;
 
-pub struct CurrentLimitFilter<Motor> {
+pub struct CurrentLimitFilter<Motor, Sensor> {
   pub motor: Motor,
+  pub sensor: Sensor,
   pub current_min: Current,
   pub current_max: Current,
 }
 
-impl<Motor> CurrentLimitFilter<Motor> {
-  pub fn new(current_min: Current, current_max: Current, motor: Motor) -> Self {
-    Self { current_min, current_max, motor }
+impl<Motor, Sensor> CurrentLimitFilter<Motor, Sensor> {
+  pub fn new(current_min: Current, current_max: Current, sensor: Sensor, motor: Motor) -> Self {
+    Self { current_min, current_max, sensor, motor }
   }
 }
 
 impl<
-  Motor: MotorCurrentDynamics + MotorForwardDynamics
-> Filter<(Voltage, AngularVelocity)> for CurrentLimitFilter<Motor> {
+  Motor: MotorCurrentDynamics + MotorForwardDynamics,
+  Sensor: crate::sensors::Sensor<AngularVelocity>,
+  Time
+> Filter<Voltage, Time> for CurrentLimitFilter<Motor, Sensor> {
   type Output = Voltage;
 
-  fn calculate(&mut self, input: (Voltage, AngularVelocity)) -> Self::Output {
-    let v_min = self.motor.voltage(self.motor.torque_from_current(self.current_min), input.1);
-    let v_max = self.motor.voltage(self.motor.torque_from_current(self.current_max), input.1);
+  fn calculate(&mut self, input: Voltage, _time: Time) -> Self::Output {
+    let speed = self.sensor.get_angular_velocity();
+    let v_min = self.motor.voltage(self.motor.torque_from_current(self.current_min), speed);
+    let v_max = self.motor.voltage(self.motor.torque_from_current(self.current_max), speed);
 
-    input.0.max(v_min).min(v_max)
-  }
-
-  fn reset(&mut self) { }
-}
-
-impl<
-  Motor: SpooledMotorCurrentDynamics + SpooledMotorForwardDynamics
-> Filter<(Voltage, Velocity)> for CurrentLimitFilter<Motor> {
-  type Output = Voltage;
-
-  fn calculate(&mut self, input: (Voltage, Velocity)) -> Self::Output {
-    let v_min = self.motor.voltage(self.motor.force_from_current(self.current_min), input.1);
-    let v_max = self.motor.voltage(self.motor.force_from_current(self.current_max), input.1);
-
-    input.0.max(v_min).min(v_max)
+    input.max(v_min).min(v_max)
   }
 
   fn reset(&mut self) { }

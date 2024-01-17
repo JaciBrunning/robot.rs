@@ -22,7 +22,7 @@ impl<GI: Clone, GO: Clone, I, O> LinearFilter<GI, GO, I, O> {
   }
 }
 
-impl<GI, GO, I, O> Filter<I> for LinearFilter<GI, GO, I, O>
+impl<GI, GO, I, O, Time> Filter<I, Time> for LinearFilter<GI, GO, I, O>
 where
   O: Zero,
   GI: Copy,
@@ -36,7 +36,7 @@ where
 {
   type Output = O;
   
-  fn calculate(&mut self, input: I) -> O {
+  fn calculate(&mut self, input: I, _time: Time) -> O {
     if self.ff_gains.len() > 0 {
       if self.inputs.len() >= self.ff_gains.len() {
         self.inputs.pop_front();
