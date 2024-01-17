@@ -2,15 +2,20 @@ use std::{marker::PhantomData, ops::Neg};
 
 pub mod binary;
 pub mod diff;
-pub mod feedforward;
+pub mod offset;
 pub mod linear;
 pub mod pid;
 pub mod predictive;
+pub mod transform;
 
-pub trait Filter<I, Time> {
+pub trait Filter<I> {
   type Output;
 
-  fn calculate(&self, input: I, time: Time) -> Self::Output;
+  fn calculate(&self, input: I) -> Self::Output;
+}
+
+pub trait ReversibleFilter<I> : Filter<I> {
+  fn calculate_reverse(&self, output: <Self as Filter<I>>::Output) -> I;
 }
 
 pub trait StatefulFilter<I, Time> {
@@ -33,27 +38,33 @@ impl<T> IdentityFilter<T> {
   pub fn new() -> Self { Self { phantom: PhantomData } }
 }
 
-impl<T, Time> Filter<T, Time> for IdentityFilter<T> {
+impl<T> Filter<T> for IdentityFilter<T> {
   type Output = T;
-  fn calculate(&self, input: T, _time: Time) -> T {
+  fn calculate(&self, input: T) -> T {
     input
   }
 }
 
-pub struct StatefulFilterAdapter<T: Filter<I, Time>, I, Time> {
-  pub filter: T,
-  phantom: PhantomData<(I, Time)>
+impl<T> ReversibleFilter<T> for IdentityFilter<T> {
+  fn calculate_reverse(&self, output: <Self as Filter<T>>::Output) -> T {
+    output
+  }
 }
 
-impl<T: Filter<I, Time>, I, Time> StatefulFilterAdapter<T, I, Time> {
+pub struct StatefulFilterAdapter<T: Filter<I>, I> {
+  pub filter: T,
+  phantom: PhantomData<I>
+}
+
+impl<T: Filter<I>, I> StatefulFilterAdapter<T, I> {
   pub fn new(filter: T) -> Self { Self { filter, phantom: PhantomData } }
 }
 
-impl<T: Filter<I, Time>, I, Time> StatefulFilter<I, Time> for StatefulFilterAdapter<T, I, Time> {
+impl<T: Filter<I>, I, Time> StatefulFilter<I, Time> for StatefulFilterAdapter<T, I> {
   type Output = T::Output;
 
   fn calculate(&mut self, input: I, time: Time) -> Self::Output {
-    self.filter.calculate(input, time)
+    self.filter.calculate(input)
   }
 }
 
@@ -66,11 +77,19 @@ impl<T> InvertingFilter<T> {
   pub fn new() -> Self { Self { phantom: PhantomData } }
 }
 
-impl<T: Neg, Time> Filter<T, Time> for InvertingFilter<T> {
+impl<T: Neg> Filter<T> for InvertingFilter<T> {
   type Output = <T as Neg>::Output;
 
-  fn calculate(&self, input: T, _time: Time) -> Self::Output {
+  fn calculate(&self, input: T) -> Self::Output {
     -input
+  }
+}
+
+impl<T: Neg> ReversibleFilter<T> for InvertingFilter<T> 
+  where <T as Neg>::Output: Neg<Output = T>
+{
+  fn calculate_reverse(&self, output: <Self as Filter<T>>::Output) -> T {
+    -output
   }
 }
 
@@ -84,10 +103,10 @@ impl<T> ClampingFilter<T> {
   pub fn new(min: T, max: T) -> Self { Self { min, max } }
 }
 
-impl<T: PartialOrd<T> + Copy, Time> Filter<T, Time> for ClampingFilter<T> {
+impl<T: PartialOrd<T> + Copy> Filter<T> for ClampingFilter<T> {
   type Output = T;
 
-  fn calculate(&self, input: T, _time: Time) -> Self::Output {
+  fn calculate(&self, input: T) -> Self::Output {
     match input {
       input if input < self.min => self.min,
       input if input > self.max => self.max,
@@ -96,27 +115,26 @@ impl<T: PartialOrd<T> + Copy, Time> Filter<T, Time> for ClampingFilter<T> {
   }
 }
 
-pub struct ChainedFilters<A, B, Time> {
+pub struct ChainedFilters<A, B> {
   pub a: A, 
-  pub b: B,
-  phantom: PhantomData<Time>
+  pub b: B
 }
 
-impl<A, B, Time> ChainedFilters<A, B, Time> {
+impl<A, B> ChainedFilters<A, B> {
   pub fn new(a: A, b: B) -> Self {
-    Self { a, b, phantom: PhantomData }
+    Self { a, b }
   }
 }
 
-impl<A, B, I, Time: Copy> Filter<I, Time> for ChainedFilters<A, B, Time>
+impl<A, B, I> Filter<I> for ChainedFilters<A, B>
 where
-  A: Filter<I, Time>,
-  B: Filter<<A as Filter<I, Time>>::Output, Time>
+  A: Filter<I>,
+  B: Filter<<A as Filter<I>>::Output>
 {
   type Output = B::Output;
 
-  fn calculate(&self, input: I, time: Time) -> Self::Output {
-    self.b.calculate(self.a.calculate(input, time), time)
+  fn calculate(&self, input: I) -> Self::Output {
+    self.b.calculate(self.a.calculate(input))
   }
 }
 
@@ -197,17 +215,17 @@ where
   }
 }
 
-pub trait FilterExt<I, Time> : Filter<I, Time> + Sized {
-  fn to_stateful(self) -> StatefulFilterAdapter<Self, I, Time>;
-  fn then<Other: Filter<Self::Output, Time>>(self, other: Other) -> ChainedFilters<Self, Other, Time>;
+pub trait FilterExt<I> : Filter<I> + Sized {
+  fn to_stateful(self) -> StatefulFilterAdapter<Self, I>;
+  fn then<Other: Filter<Self::Output>>(self, other: Other) -> ChainedFilters<Self, Other>;
 }
 
-impl<T: Filter<I, Time>, I, Time> FilterExt<I, Time> for T {
-  fn to_stateful(self) -> StatefulFilterAdapter<Self, I, Time> {
+impl<T: Filter<I>, I> FilterExt<I> for T {
+  fn to_stateful(self) -> StatefulFilterAdapter<Self, I> {
     StatefulFilterAdapter::new(self)
   }
 
-  fn then<Other: Filter<Self::Output, Time>>(self, other: Other) -> ChainedFilters<Self, Other, Time> {
+  fn then<Other: Filter<Self::Output>>(self, other: Other) -> ChainedFilters<Self, Other> {
     ChainedFilters::new(self, other)
   }
 }

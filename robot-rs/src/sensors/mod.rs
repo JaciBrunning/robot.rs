@@ -1,8 +1,8 @@
-use std::{ops::Neg, f64::consts::PI, marker::PhantomData};
+use std::{ops::Neg, marker::PhantomData};
 
 #[cfg(feature = "ntcore")]
 use ntcore_rs::GenericPublisher;
-use robot_rs_units::{motion::{TickVelocity, AngularVelocity, Velocity, rads_per_second}, traits::ToFloat};
+use robot_rs_units::{motion::{TickVelocity, AngularVelocity, Velocity}, traits::ToFloat};
 
 use crate::{units::*, traits::Wrapper, filters::{Filter, InvertingFilter, StatefulFilter, FilterExt, StatefulFilterAdapter}};
 
@@ -94,9 +94,9 @@ impl<T: Sensor<U>, U, F> FilteredSensor<T, U, F> {
   }
 }
 
-impl<T: Sensor<U>, U, F: Filter<U, Time>> Sensor<<F as Filter<U, Time>>::Output> for FilteredSensor<T, U, F> {
-  fn get_sensor_value(&self) -> <F as Filter<U, Time>>::Output {
-    self.filter.calculate(self.sensor.get_sensor_value(), self.get_last_measurement_time())
+impl<T: Sensor<U>, U, F: Filter<U>> Sensor<<F as Filter<U>>::Output> for FilteredSensor<T, U, F> {
+  fn get_sensor_value(&self) -> <F as Filter<U>>::Output {
+    self.filter.calculate(self.sensor.get_sensor_value())
   }
 
   fn get_last_measurement_time(&self) -> Time {
@@ -124,89 +124,6 @@ impl<T: StatefulSensor<U>, U, F: StatefulFilter<U, Time>> StatefulSensor<<F as S
 
   fn get_last_measurement_time(&self) -> Time {
     self.sensor.get_last_measurement_time()
-  }
-}
-
-// CONVERSIONS
-// TODO: Move these to filters?
-
-#[derive(Clone, Debug)]
-pub struct EncoderToAngular<T> {
-  pub encoder: T,
-  pub ticks_per_rad: Ticks
-}
-
-impl<T> EncoderToAngular<T> {
-  pub fn new(encoder: T, ticks_per_revolution: Ticks) -> Self {
-    Self { encoder, ticks_per_rad: ticks_per_revolution / (2.0 * PI) }
-  }
-}
-
-impl<T> Wrapper<T> for EncoderToAngular<T> {
-  fn eject(self) -> T {
-    self.encoder
-  }
-}
-
-impl<T: Encoder> Sensor<Angle> for EncoderToAngular<T> {
-  #[inline(always)]
-  fn get_sensor_value(&self) -> Angle {
-    Angle::new::<radian>((self.encoder.get_ticks() / self.ticks_per_rad).to_base())
-  }
-
-  fn get_last_measurement_time(&self) -> Time {
-    self.encoder.get_last_measurement_time()
-  }
-}
-
-impl<T: VelocityEncoder> Sensor<AngularVelocity> for EncoderToAngular<T> {
-  #[inline(always)]
-  fn get_sensor_value(&self) -> AngularVelocity {
-    AngularVelocity::new::<rads_per_second>((self.encoder.get_tick_velocity() / self.ticks_per_rad).to_base())
-  }
-
-  fn get_last_measurement_time(&self) -> Time {
-    self.encoder.get_last_measurement_time()
-  }
-}
-
-#[derive(Clone, Debug)]
-pub struct AngularToLinear<T> {
-  pub angular: T,
-  pub radius: Length
-}
-
-impl<T> AngularToLinear<T> {
-  pub fn new(angular: T, radius: Length) -> Self {
-    Self { angular, radius }
-  }
-}
-
-impl<T> Wrapper<T> for AngularToLinear<T> {
-  fn eject(self) -> T {
-    self.angular
-  }
-}
-
-impl<T: AngularSensor> Sensor<Length> for AngularToLinear<T> {
-  #[inline(always)]
-  fn get_sensor_value(&self) -> Length {
-    self.angular.get_angle() / (1.0 * radian) * self.radius
-  }
-
-  fn get_last_measurement_time(&self) -> Time {
-    self.angular.get_last_measurement_time()
-  }
-}
-
-impl<T: AngularVelocitySensor> Sensor<Velocity> for AngularToLinear<T> {
-  #[inline(always)]
-  fn get_sensor_value(&self) -> Velocity {
-    self.angular.get_angular_velocity() / (1.0 * radian) * self.radius
-  }
-
-  fn get_last_measurement_time(&self) -> Time {
-    self.angular.get_last_measurement_time()
   }
 }
 
@@ -283,7 +200,7 @@ impl<U: ToFloat + Copy, T: StatefulSensor<U>> StatefulSensor<U> for ObservableSt
 }
 
 pub type InvertedSensor<T, U> = FilteredSensor<T, U, InvertingFilter<U>>;
-pub type InvertedStatefulSensor<T, U> = FilteredStatefulSensor<T, U, StatefulFilterAdapter<InvertingFilter<U>, U, Time>>;
+pub type InvertedStatefulSensor<T, U> = FilteredStatefulSensor<T, U, StatefulFilterAdapter<InvertingFilter<U>, U>>;
 
 pub trait SensorExt<U> : Sized + Sensor<U> {
   fn invert(self) -> InvertedSensor<Self, U>;

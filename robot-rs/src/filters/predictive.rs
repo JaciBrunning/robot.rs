@@ -21,11 +21,10 @@ impl<Motor, Sensor> CurrentLimitFilter<Motor, Sensor> {
 impl<
   Motor: MotorCurrentDynamics + MotorForwardDynamics,
   Sensor: crate::sensors::Sensor<AngularVelocity>,
-  Time
-> Filter<Voltage, Time> for CurrentLimitFilter<Motor, Sensor> {
+> Filter<Voltage> for CurrentLimitFilter<Motor, Sensor> {
   type Output = Voltage;
 
-  fn calculate(&self, input: Voltage, _time: Time) -> Self::Output {
+  fn calculate(&self, input: Voltage) -> Self::Output {
     let speed = self.sensor.get_angular_velocity();
     let v_min = self.motor.voltage(self.motor.torque_from_current(self.current_min), speed);
     let v_max = self.motor.voltage(self.motor.torque_from_current(self.current_max), speed);

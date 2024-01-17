@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use ntcore_rs::{NetworkTableInstance, GenericPublisher};
 use num_traits::Zero;
-use robot_rs::{start::{RobotState, RobotResult}, actuators::{ActuatorExt, sim::{SimulatedActuator, ReadableActuator}, VoltageActuator}, sensors::{sim::{SimulatedSensor, SettableSensor}, SensorExt, DisplacementSensor}, robot_main, filters::{pid::PID, Filter, ChainedFiltersA, feedforward::OffsetFeedforwardFilter, predictive::CurrentLimitFilter, diff::DifferentiatingFilter}, time::now, physics::motor::{from_dyno::KrakenTrap, MotorExtensionTrait, SpooledMotorInverseDynamics, SpooledMotorCurrentDynamics, SpooledMotorForwardDynamics}};
+use robot_rs::{start::{RobotState, RobotResult}, actuators::{ActuatorExt, sim::{SimulatedActuator, ReadableActuator}, VoltageActuator}, sensors::{sim::{SimulatedSensor, SettableSensor}, SensorExt, DisplacementSensor}, robot_main, filters::{pid::PID, Filter, ChainedFiltersA, offset::OffsetFeedforwardFilter, predictive::CurrentLimitFilter, diff::DifferentiatingFilter}, time::now, physics::motor::{from_dyno::KrakenTrap, MotorExtensionTrait, SpooledMotorInverseDynamics, SpooledMotorCurrentDynamics, SpooledMotorForwardDynamics}};
 use robot_rs_units::{electrical::{volt, Voltage}, meter, Length, inch, kilogram, motion::{meters_per_second, meters_per_second2}, millisecond, traits::ToFloat, Time, second, ampere};
 
 fn my_robot(state: RobotState) -> RobotResult {

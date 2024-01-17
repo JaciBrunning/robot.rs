@@ -54,8 +54,8 @@ impl<T: Actuator<U, Time>, U, F: StatefulFilter<I, Time, Output=U>, I, Time: Cop
   }
 }
 
-pub type InvertedActuator<T, U, Time> = FilteredActuator<T, U, StatefulFilterAdapter<InvertingFilter<U>, U, Time>, U, Time>;
-pub type ClampedActuator<T, U, Time> = FilteredActuator<T, U, StatefulFilterAdapter<ClampingFilter<U>, U, Time>, U, Time>;
+pub type InvertedActuator<T, U, Time> = FilteredActuator<T, U, StatefulFilterAdapter<InvertingFilter<U>, U>, U, Time>;
+pub type ClampedActuator<T, U, Time> = FilteredActuator<T, U, StatefulFilterAdapter<ClampingFilter<U>, U>, U, Time>;
 
 #[cfg(feature = "ntcore")]
 pub struct ObservableActuator<T: Actuator<U, Time>, U, Time> {
