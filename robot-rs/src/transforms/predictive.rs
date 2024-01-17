@@ -2,17 +2,17 @@ use robot_rs_units::{Current, electrical::Voltage, motion::AngularVelocity, trai
 
 use crate::{physics::motor::{MotorCurrentDynamics, MotorForwardDynamics}, sensors::AngularVelocitySensor};
 
-use super::Filter;
+use super::Transform;
 
 #[derive(Clone)]
-pub struct CurrentLimitFilter<Motor, Sensor> {
+pub struct CurrentLimitTransform<Motor, Sensor> {
   pub motor: Motor,
   pub sensor: Sensor,
   pub current_min: Current,
   pub current_max: Current,
 }
 
-impl<Motor, Sensor> CurrentLimitFilter<Motor, Sensor> {
+impl<Motor, Sensor> CurrentLimitTransform<Motor, Sensor> {
   pub fn new(current_min: Current, current_max: Current, sensor: Sensor, motor: Motor) -> Self {
     Self { current_min, current_max, sensor, motor }
   }
@@ -21,7 +21,7 @@ impl<Motor, Sensor> CurrentLimitFilter<Motor, Sensor> {
 impl<
   Motor: MotorCurrentDynamics + MotorForwardDynamics,
   Sensor: crate::sensors::Sensor<AngularVelocity>,
-> Filter<Voltage> for CurrentLimitFilter<Motor, Sensor> {
+> Transform<Voltage> for CurrentLimitTransform<Motor, Sensor> {
   type Output = Voltage;
 
   fn calculate(&self, input: Voltage) -> Self::Output {

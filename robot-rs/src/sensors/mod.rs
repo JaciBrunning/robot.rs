@@ -4,7 +4,7 @@ use std::{ops::Neg, marker::PhantomData};
 use ntcore_rs::GenericPublisher;
 use robot_rs_units::{motion::{TickVelocity, AngularVelocity, Velocity}, traits::ToFloat};
 
-use crate::{units::*, traits::Wrapper, filters::{Filter, InvertingFilter, StatefulFilter, FilterExt, StatefulFilterAdapter}};
+use crate::{units::*, traits::Wrapper, transforms::{Transform, InvertingTransform, StatefulTransform, TransformExt, StatefulTransformAdapter}};
 
 pub trait Sensor<U> {
   fn get_sensor_value(&self) -> U;
@@ -82,21 +82,21 @@ impl<T: Sensor<U>, U> StatefulSensor<U> for StatefulSensorAdapter<T, U> {
 }
 
 #[derive(Clone, Debug)]
-pub struct FilteredSensor<T: Sensor<U>, U, F> {
+pub struct TransformedSensor<T: Sensor<U>, U, F> {
   pub sensor: T,
-  pub filter: F,
+  pub transform: F,
   phantom: PhantomData<U>
 }
 
-impl<T: Sensor<U>, U, F> FilteredSensor<T, U, F> {
-  pub fn new(sensor: T, filter: F) -> Self {
-    Self { sensor, filter, phantom: PhantomData }
+impl<T: Sensor<U>, U, F> TransformedSensor<T, U, F> {
+  pub fn new(sensor: T, transform: F) -> Self {
+    Self { sensor, transform, phantom: PhantomData }
   }
 }
 
-impl<T: Sensor<U>, U, F: Filter<U>> Sensor<<F as Filter<U>>::Output> for FilteredSensor<T, U, F> {
-  fn get_sensor_value(&self) -> <F as Filter<U>>::Output {
-    self.filter.calculate(self.sensor.get_sensor_value())
+impl<T: Sensor<U>, U, F: Transform<U>> Sensor<<F as Transform<U>>::Output> for TransformedSensor<T, U, F> {
+  fn get_sensor_value(&self) -> <F as Transform<U>>::Output {
+    self.transform.calculate(self.sensor.get_sensor_value())
   }
 
   fn get_last_measurement_time(&self) -> Time {
@@ -105,21 +105,21 @@ impl<T: Sensor<U>, U, F: Filter<U>> Sensor<<F as Filter<U>>::Output> for Filtere
 }
 
 #[derive(Clone, Debug)]
-pub struct FilteredStatefulSensor<T: StatefulSensor<U>, U, F> {
+pub struct TransformedStatefulSensor<T: StatefulSensor<U>, U, F> {
   pub sensor: T,
-  pub filter: F,
+  pub transform: F,
   phantom: PhantomData<U>
 }
 
-impl<T: StatefulSensor<U>, U, F> FilteredStatefulSensor<T, U, F> {
-  pub fn new(sensor: T, filter: F) -> Self {
-    Self { sensor, filter, phantom: PhantomData }
+impl<T: StatefulSensor<U>, U, F> TransformedStatefulSensor<T, U, F> {
+  pub fn new(sensor: T, transform: F) -> Self {
+    Self { sensor, transform, phantom: PhantomData }
   }
 }
 
-impl<T: StatefulSensor<U>, U, F: StatefulFilter<U, Time>> StatefulSensor<<F as StatefulFilter<U, Time>>::Output> for FilteredStatefulSensor<T, U, F> {
-  fn get_sensor_value(&mut self) -> <F as StatefulFilter<U, Time>>::Output {
-    self.filter.calculate(self.sensor.get_sensor_value(), self.get_last_measurement_time())
+impl<T: StatefulSensor<U>, U, F: StatefulTransform<U, Time>> StatefulSensor<<F as StatefulTransform<U, Time>>::Output> for TransformedStatefulSensor<T, U, F> {
+  fn get_sensor_value(&mut self) -> <F as StatefulTransform<U, Time>>::Output {
+    self.transform.calculate(self.sensor.get_sensor_value(), self.get_last_measurement_time())
   }
 
   fn get_last_measurement_time(&self) -> Time {
@@ -199,12 +199,12 @@ impl<U: ToFloat + Copy, T: StatefulSensor<U>> StatefulSensor<U> for ObservableSt
   }
 }
 
-pub type InvertedSensor<T, U> = FilteredSensor<T, U, InvertingFilter<U>>;
-pub type InvertedStatefulSensor<T, U> = FilteredStatefulSensor<T, U, StatefulFilterAdapter<InvertingFilter<U>, U>>;
+pub type InvertedSensor<T, U> = TransformedSensor<T, U, InvertingTransform<U>>;
+pub type InvertedStatefulSensor<T, U> = TransformedStatefulSensor<T, U, StatefulTransformAdapter<InvertingTransform<U>, U>>;
 
 pub trait SensorExt<U> : Sized + Sensor<U> {
   fn invert(self) -> InvertedSensor<Self, U>;
-  fn filter<F>(self, filter: F) -> FilteredSensor<Self, U, F>;
+  fn transform<F>(self, transform: F) -> TransformedSensor<Self, U, F>;
 
   fn to_stateful(self) -> StatefulSensorAdapter<Self, U>;
 
@@ -214,15 +214,15 @@ pub trait SensorExt<U> : Sized + Sensor<U> {
 
 impl<U, T: Sensor<U>> SensorExt<U> for T {
   fn invert(self) -> InvertedSensor<Self, U> {
-    FilteredSensor::new(self, InvertingFilter::new())
+    TransformedSensor::new(self, InvertingTransform::new())
   }
 
   fn to_stateful(self) -> StatefulSensorAdapter<Self, U> {
     StatefulSensorAdapter::new(self)
   }
 
-  fn filter<F>(self, filter: F) -> FilteredSensor<Self, U, F> {
-    FilteredSensor::new(self, filter)
+  fn transform<F>(self, transform: F) -> TransformedSensor<Self, U, F> {
+    TransformedSensor::new(self, transform)
   }
 
   #[cfg(feature = "ntcore")]
@@ -233,7 +233,7 @@ impl<U, T: Sensor<U>> SensorExt<U> for T {
 
 pub trait StatefulSensorExt<U: Neg<Output = U>> : Sized + StatefulSensor<U> {
   fn invert(self) -> InvertedStatefulSensor<Self, U>;
-  fn filter<F>(self, filter: F) -> FilteredStatefulSensor<Self, U, F>;
+  fn transform<F>(self, transform: F) -> TransformedStatefulSensor<Self, U, F>;
 
   #[cfg(feature = "ntcore")]
   fn observable(self, topic: crate::ntcore::Topic) -> ObservableStatefulSensor<U, Self>;
@@ -241,11 +241,11 @@ pub trait StatefulSensorExt<U: Neg<Output = U>> : Sized + StatefulSensor<U> {
 
 impl<U: Neg<Output = U>, T: StatefulSensor<U>> StatefulSensorExt<U> for T {
   fn invert(self) -> InvertedStatefulSensor<Self, U> {
-    FilteredStatefulSensor::new(self, InvertingFilter::new().to_stateful())
+    TransformedStatefulSensor::new(self, InvertingTransform::new().to_stateful())
   }
 
-  fn filter<F>(self, filter: F) -> FilteredStatefulSensor<Self, U, F> {
-    FilteredStatefulSensor::new(self, filter)
+  fn transform<F>(self, transform: F) -> TransformedStatefulSensor<Self, U, F> {
+    TransformedStatefulSensor::new(self, transform)
   }
 
   #[cfg(feature = "ntcore")]
@@ -302,7 +302,7 @@ mod tests {
   use num_traits::Zero;
   use robot_rs_units::motion::meters_per_second;
 
-  use crate::{units::*, sensors::{FilteredSensor, FilteredStatefulSensor, SensorExt, StatefulSensor}, filters::diff::DifferentiatingFilter, time};
+  use crate::{units::*, sensors::{TransformedSensor, TransformedStatefulSensor, SensorExt, StatefulSensor}, transforms::diff::DifferentiatingTransform, time};
   use super::Sensor;
 
   struct MockSensor {
@@ -325,7 +325,7 @@ mod tests {
 
     let value = sensor.value.clone();
     // let diff: DifferentiableSensor<Length, _> = DifferentiableSensor::new(sensor);
-    let mut diff = FilteredStatefulSensor::new(sensor.to_stateful(), DifferentiatingFilter::new());
+    let mut diff = TransformedStatefulSensor::new(sensor.to_stateful(), DifferentiatingTransform::new());
   
     assert_eq!(0.0 * meters_per_second, diff.get_sensor_value());
     std::thread::sleep(Duration::from_millis(100));

@@ -2,19 +2,19 @@ use std::ops::{Div, Sub};
 
 use num_traits::Zero;
 
-use super::StatefulFilter;
+use super::StatefulTransform;
 
-pub struct DifferentiatingFilter<U, Time> {
+pub struct DifferentiatingTransform<U, Time> {
   pub last_value: Option<(Time, U)>,
 }
 
-impl<U, Time> DifferentiatingFilter<U, Time> {
+impl<U, Time> DifferentiatingTransform<U, Time> {
   pub fn new() -> Self {
     Self { last_value: None }
   }
 }
 
-impl<U: Copy + Div<Time> + Sub<U, Output=U>, Time: Copy + Sub<Time, Output=Time>> StatefulFilter<U, Time> for DifferentiatingFilter<U, Time>
+impl<U: Copy + Div<Time> + Sub<U, Output=U>, Time: Copy + Sub<Time, Output=Time>> StatefulTransform<U, Time> for DifferentiatingTransform<U, Time>
 where
   <U as Div<Time>>::Output: Zero
 {

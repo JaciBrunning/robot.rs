@@ -1,4 +1,4 @@
-use super::StatefulFilter;
+use super::StatefulTransform;
 
 #[derive(Debug, Clone)]
 pub enum Edge {
@@ -8,12 +8,12 @@ pub enum Edge {
 }
 
 #[derive(Debug)]
-pub struct EdgeFilter {
+pub struct EdgeTransform {
   edge: Edge,
   last: Option<bool>,
 }
 
-impl EdgeFilter {
+impl EdgeTransform {
   pub fn new(edge: Edge) -> Self {
     Self {
       edge,
@@ -22,7 +22,7 @@ impl EdgeFilter {
   }
 }
 
-impl<Time> StatefulFilter<bool, Time> for EdgeFilter {
+impl<Time> StatefulTransform<bool, Time> for EdgeTransform {
   type Output = bool;
   
   fn calculate(&mut self, input: bool, _time: Time) -> bool {

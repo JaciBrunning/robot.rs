@@ -4,7 +4,7 @@ use ntcore_rs::{Entry, Publisher, Topic, GenericPublisher, GenericSubscriber};
 use num_traits::Zero;
 use robot_rs_units::traits::{ToFloat, FromFloat};
 
-use super::{HasSetpoint, StatefulFilter};
+use super::{HasSetpoint, StatefulTransform};
 
 pub type Derivative<PV, Time> = <PV as Div<Time>>::Output;
 pub type Integral<PV, Time> = <PV as Mul<Time>>::Output;
@@ -94,7 +94,7 @@ impl<
   PV: Mul<Time> + Div<Time> + Copy,
   Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy,
   Time: Sub<Time, Output = Time> + Copy
-> StatefulFilter<PV, Time> for PID<PV, Output, Time>
+> StatefulTransform<PV, Time> for PID<PV, Output, Time>
 where
   PV: Mul<Kp<PV, Output>, Output = Output> + Sub<PV, Output = PV>,
   Integral<PV, Time>: Copy + Zero + Mul<Ki<PV, Output, Time>, Output = Output>,
@@ -214,7 +214,7 @@ impl<
   PV: Mul<Time> + Div<Time> + Copy + ToFloat,
   Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy + ToFloat,
   Time: Sub<Time, Output = Time> + Copy
-> StatefulFilter<PV, Time> for TunablePID<PV, Output, Time>
+> StatefulTransform<PV, Time> for TunablePID<PV, Output, Time>
 where
   PV: Mul<Kp<PV, Output>, Output = Output> + Sub<PV, Output = PV>,
   Integral<PV, Time>: Copy + Zero + Mul<Ki<PV, Output, Time>, Output = Output> + ToFloat,

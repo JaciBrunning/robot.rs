@@ -2,7 +2,7 @@ use std::ops::Div;
 
 use robot_rs_units::{Ticks, Angle, Length, motion::{TickVelocity, AngularVelocity, Velocity}, radian};
 
-use super::{Filter, ReversibleFilter};
+use super::{Transform, ReversibleTransform};
 
 #[derive(Clone, Debug)]
 pub struct EncoderToAngular {
@@ -15,7 +15,7 @@ impl EncoderToAngular {
   }
 }
 
-impl Filter<Ticks> for EncoderToAngular {
+impl Transform<Ticks> for EncoderToAngular {
   type Output = Angle;
 
   fn calculate(&self, input: Ticks) -> Self::Output {
@@ -23,7 +23,7 @@ impl Filter<Ticks> for EncoderToAngular {
   }
 }
 
-impl Filter<TickVelocity> for EncoderToAngular {
+impl Transform<TickVelocity> for EncoderToAngular {
   type Output = AngularVelocity;
 
   fn calculate(&self, input: TickVelocity) -> Self::Output {
@@ -31,14 +31,14 @@ impl Filter<TickVelocity> for EncoderToAngular {
   }
 }
 
-impl ReversibleFilter<Ticks> for EncoderToAngular {
-  fn calculate_reverse(&self, output: <Self as Filter<Ticks>>::Output) -> Ticks {
+impl ReversibleTransform<Ticks> for EncoderToAngular {
+  fn calculate_reverse(&self, output: <Self as Transform<Ticks>>::Output) -> Ticks {
     output / self.factor
   }
 }
 
-impl ReversibleFilter<TickVelocity> for EncoderToAngular {
-  fn calculate_reverse(&self, output: <Self as Filter<TickVelocity>>::Output) -> TickVelocity {
+impl ReversibleTransform<TickVelocity> for EncoderToAngular {
+  fn calculate_reverse(&self, output: <Self as Transform<TickVelocity>>::Output) -> TickVelocity {
     output / self.factor
   }
 }
@@ -54,7 +54,7 @@ impl AngularToLinear {
   }
 }
 
-impl Filter<Angle> for AngularToLinear {
+impl Transform<Angle> for AngularToLinear {
   type Output = Length;
 
   fn calculate(&self, input: Angle) -> Self::Output {
@@ -62,7 +62,7 @@ impl Filter<Angle> for AngularToLinear {
   }
 }
 
-impl Filter<AngularVelocity> for AngularToLinear {
+impl Transform<AngularVelocity> for AngularToLinear {
   type Output = Velocity;
 
   fn calculate(&self, input: AngularVelocity) -> Self::Output {
@@ -70,14 +70,14 @@ impl Filter<AngularVelocity> for AngularToLinear {
   }
 }
 
-impl ReversibleFilter<Angle> for AngularToLinear {
-  fn calculate_reverse(&self, output: <Self as Filter<Angle>>::Output) -> Angle {
+impl ReversibleTransform<Angle> for AngularToLinear {
+  fn calculate_reverse(&self, output: <Self as Transform<Angle>>::Output) -> Angle {
     (output / self.radius) * (1.0 * radian)
   }
 }
 
-impl ReversibleFilter<AngularVelocity> for AngularToLinear {
-  fn calculate_reverse(&self, output: <Self as Filter<AngularVelocity>>::Output) -> AngularVelocity {
+impl ReversibleTransform<AngularVelocity> for AngularToLinear {
+  fn calculate_reverse(&self, output: <Self as Transform<AngularVelocity>>::Output) -> AngularVelocity {
     (output / self.radius) * (1.0 * radian)
   }
 }

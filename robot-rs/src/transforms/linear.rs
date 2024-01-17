@@ -2,16 +2,16 @@ use std::{collections::VecDeque, ops::{Mul, Sub, Add, Div, Neg}};
 
 use num_traits::Zero;
 
-use super::StatefulFilter;
+use super::StatefulTransform;
 
-pub struct LinearFilter<GI, GO, I, O> {
+pub struct LinearTransform<GI, GO, I, O> {
   ff_gains: Vec<GI>,
   fb_gains: Vec<GO>,
   inputs: VecDeque<I>,
   outputs: VecDeque<O>
 }
 
-impl<GI: Clone, GO: Clone, I, O> LinearFilter<GI, GO, I, O> {
+impl<GI: Clone, GO: Clone, I, O> LinearTransform<GI, GO, I, O> {
   pub fn new<FF: Into<GI> + Clone, FB: Into<GO> + Clone>(ff_gains: &[FF], fb_gains: &[FB]) -> Self {
     Self {
       ff_gains: ff_gains.into_iter().cloned().map(Into::into).collect(),
@@ -22,7 +22,7 @@ impl<GI: Clone, GO: Clone, I, O> LinearFilter<GI, GO, I, O> {
   }
 }
 
-impl<GI, GO, I, O, Time> StatefulFilter<I, Time> for LinearFilter<GI, GO, I, O>
+impl<GI, GO, I, O, Time> StatefulTransform<I, Time> for LinearTransform<GI, GO, I, O>
 where
   O: Zero,
   GI: Copy,
@@ -65,21 +65,21 @@ where
   }
 }
 
-pub struct LinearFilters;
+pub struct LinearTransforms;
 
-impl LinearFilters {
-  pub fn moving_average<T>(n: usize) -> LinearFilter<f64, f64, T, T> {
+impl LinearTransforms {
+  pub fn moving_average<T>(n: usize) -> LinearTransform<f64, f64, T, T> {
     let v = vec![1.0 / (n as f64); n];
-    LinearFilter::new::<f64, f64>(&v[..], &[])
+    LinearTransform::new::<f64, f64>(&v[..], &[])
   }
 
-  pub fn low_pass<Time: Div<Time, Output = O> + Neg<Output = Time>, T, O: Into<f64>>(time_constant: Time, period: Time) -> LinearFilter<f64, f64, T, T> {
+  pub fn low_pass<Time: Div<Time, Output = O> + Neg<Output = Time>, T, O: Into<f64>>(time_constant: Time, period: Time) -> LinearTransform<f64, f64, T, T> {
     let gain = Into::<f64>::into(-period / time_constant).exp();
-    LinearFilter::new(&[1.0 - gain], &[-gain])
+    LinearTransform::new(&[1.0 - gain], &[-gain])
   }
 
-  pub fn high_pass<Time: Div<Time, Output = O> + Neg<Output = Time>, T, O: Into<f64>>(time_constant: Time, period: Time) -> LinearFilter<f64, f64, T, T> {
+  pub fn high_pass<Time: Div<Time, Output = O> + Neg<Output = Time>, T, O: Into<f64>>(time_constant: Time, period: Time) -> LinearTransform<f64, f64, T, T> {
     let gain = Into::<f64>::into(-period / time_constant).exp();
-    LinearFilter::new(&[gain, -gain], &[-gain])
+    LinearTransform::new(&[gain, -gain], &[-gain])
   }
 }

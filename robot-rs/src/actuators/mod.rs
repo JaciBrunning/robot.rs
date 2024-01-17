@@ -8,7 +8,7 @@ use std::ops::Neg;
 use ntcore_rs::GenericPublisher;
 use robot_rs_units::traits::ToFloat;
 
-use crate::filters::{InvertingFilter, ClampingFilter, StatefulFilter, FilterExt, StatefulFilterAdapter};
+use crate::transforms::{InvertingTransform, ClampingTransform, StatefulTransform, TransformExt, StatefulTransformAdapter};
 use crate::traits::Wrapper;
 use crate::units::electrical::Voltage;
 
@@ -34,28 +34,28 @@ macro_rules! actuator_alias {
 actuator_alias!(VoltageActuator, Voltage, set_voltage);
 
 #[derive(Debug, Clone)]
-pub struct FilteredActuator<T: Actuator<U, Time>, U, F, I, Time> {
+pub struct TransformedActuator<T: Actuator<U, Time>, U, F, I, Time> {
   pub actuator: T,
-  pub filter: F,
+  pub transform: F,
   phantom: PhantomData<(U, I, Time)>
 }
 
-impl<T: Actuator<U, Time>, U, F, I, Time> FilteredActuator<T, U, F, I, Time> {
-  pub fn new(actuator: T, filter: F) -> Self {
+impl<T: Actuator<U, Time>, U, F, I, Time> TransformedActuator<T, U, F, I, Time> {
+  pub fn new(actuator: T, transform: F) -> Self {
     Self {
-      actuator, filter, phantom: PhantomData
+      actuator, transform, phantom: PhantomData
     }
   }
 }
 
-impl<T: Actuator<U, Time>, U, F: StatefulFilter<I, Time, Output=U>, I, Time: Copy> Actuator<I, Time> for FilteredActuator<T, U, F, I, Time> {
+impl<T: Actuator<U, Time>, U, F: StatefulTransform<I, Time, Output=U>, I, Time: Copy> Actuator<I, Time> for TransformedActuator<T, U, F, I, Time> {
   fn set_actuator_value(&mut self, value: I, now: Time) {
-    self.actuator.set_actuator_value(self.filter.calculate(value, now), now)
+    self.actuator.set_actuator_value(self.transform.calculate(value, now), now)
   }
 }
 
-pub type InvertedActuator<T, U, Time> = FilteredActuator<T, U, StatefulFilterAdapter<InvertingFilter<U>, U>, U, Time>;
-pub type ClampedActuator<T, U, Time> = FilteredActuator<T, U, StatefulFilterAdapter<ClampingFilter<U>, U>, U, Time>;
+pub type InvertedActuator<T, U, Time> = TransformedActuator<T, U, StatefulTransformAdapter<InvertingTransform<U>, U>, U, Time>;
+pub type ClampedActuator<T, U, Time> = TransformedActuator<T, U, StatefulTransformAdapter<ClampingTransform<U>, U>, U, Time>;
 
 #[cfg(feature = "ntcore")]
 pub struct ObservableActuator<T: Actuator<U, Time>, U, Time> {
@@ -92,7 +92,7 @@ impl<T: Actuator<U, Time>, U: ToFloat + Copy, Time> Actuator<U, Time> for Observ
 pub trait ActuatorExt<U: Neg<Output = U> + PartialOrd<U> + Copy, Time> : Sized + Actuator<U, Time> {
   fn invert(self) -> InvertedActuator<Self, U, Time>;
   fn clamp(self, min: U, max: U) -> ClampedActuator<Self, U, Time>;
-  fn filter<I, F>(self, filter: F) -> FilteredActuator<Self, U, F, I, Time>;
+  fn transform<I, F>(self, transform: F) -> TransformedActuator<Self, U, F, I, Time>;
 
   #[cfg(feature = "ntcore")]
   fn observable(self, topic: crate::ntcore::Topic) -> ObservableActuator<Self, U, Time>;
@@ -100,15 +100,15 @@ pub trait ActuatorExt<U: Neg<Output = U> + PartialOrd<U> + Copy, Time> : Sized +
 
 impl<T: Actuator<U, Time>, U: Neg<Output = U> + PartialOrd<U> + Copy, Time> ActuatorExt<U, Time> for T {
   fn invert(self) -> InvertedActuator<Self, U, Time> {
-    FilteredActuator::new(self, InvertingFilter::new().to_stateful())
+    TransformedActuator::new(self, InvertingTransform::new().to_stateful())
   }
 
   fn clamp(self, min: U, max: U) -> ClampedActuator<Self, U, Time> {
-    FilteredActuator::new(self, ClampingFilter::new(min, max).to_stateful())
+    TransformedActuator::new(self, ClampingTransform::new(min, max).to_stateful())
   }
 
-  fn filter<I, F>(self, filter: F) -> FilteredActuator<Self, U, F, I, Time> {
-    FilteredActuator::new(self, filter)
+  fn transform<I, F>(self, transform: F) -> TransformedActuator<Self, U, F, I, Time> {
+    TransformedActuator::new(self, transform)
   }
 
   #[cfg(feature = "ntcore")]

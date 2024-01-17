@@ -8,7 +8,7 @@ pub use robot_rs_macros as macros;
 
 pub mod actuators;
 pub mod activity;
-pub mod filters;
+pub mod transforms;
 pub mod input;
 pub mod physics;
 pub mod sensors;
