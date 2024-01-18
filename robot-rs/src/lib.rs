@@ -6,6 +6,9 @@ pub use ntcore_rs as ntcore;
 
 pub use robot_rs_macros as macros;
 
+#[cfg(feature = "simulation")]
+pub mod sim;
+
 pub mod actuators;
 pub mod activity;
 pub mod input;

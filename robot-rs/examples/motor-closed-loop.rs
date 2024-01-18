@@ -1,67 +1,67 @@
-use std::time::Duration;
-
-use ntcore_rs::{NetworkTableInstance, GenericPublisher};
+use futures::FutureExt;
+use ntcore_rs::NetworkTableInstance;
 use num_traits::Zero;
-use robot_rs::{start::{RobotState, RobotResult}, actuators::{ActuatorExt, sim::{SimulatedActuator, ReadableActuator}, VoltageActuator}, sensors::{sim::{SimulatedSensor, SettableSensor}, SensorExt, DisplacementSensor}, robot_main, filters::{pid::PID, Filter, ChainedFiltersA, offset::OffsetFeedforwardFilter, predictive::CurrentLimitFilter, diff::DifferentiatingFilter}, time::now, physics::motor::{from_dyno::KrakenTrap, MotorExtensionTrait, SpooledMotorInverseDynamics, SpooledMotorCurrentDynamics, SpooledMotorForwardDynamics}};
-use robot_rs_units::{electrical::{volt, Voltage}, meter, Length, inch, kilogram, motion::{meters_per_second, meters_per_second2}, millisecond, traits::ToFloat, Time, second, ampere};
+use robot_rs::{systems::elevator::{ElevatorImpl, ElevatorParams, sim::ElevatorSim, AwaitableElevator}, actuators::{sim::SimulatedActuator, ActuatorExt}, sensors::{sim::SimulatedSensor, SensorExt}, physics::motor::{from_dyno::KrakenTrap, MotorExtensionTrait}, transforms::{pid::PID, stability::RMSStabilityFilter}, start::{RobotResult, RobotState}, robot_main, system, perform, activity::Priority};
+use robot_rs_units::{kilogram, degree, meter, electrical::volt, Length, inch, motion::meters_per_second, second, millisecond};
 
-fn my_robot(state: RobotState) -> RobotResult {
+async fn my_robot(_state: RobotState) -> RobotResult {
   let nt = NetworkTableInstance::default();
-  let sim_motor = SimulatedActuator::new(0.0 * volt, now());
-  let mut sim_sensor = SimulatedSensor::<Length>::new(0.0 * meter);
-  let motor_model = KrakenTrap().geared(30.0).multiply(2).to_linear(2.0 * inch);
+  let sim_motor = SimulatedActuator::new(0.0 * volt, robot_rs::time::now());
+  let sim_sensor = SimulatedSensor::<Length>::new(0.0 * meter);
+  let motor_model = KrakenTrap().geared(20.0).multiply(2).to_linear(2.0 * inch);
 
-  let mut motor = sim_motor.clone()
-      .clamp(-12.0 * volt, 12.0 * volt)
-      .observable(nt.topic("/motor"));
+  let motor = sim_motor.clone()
+      .observable(nt.topic("/elevator/motor"))
+      .clamp(-12.0 * volt, 12.0 * volt);
 
-  let mut sensor = sim_sensor.clone();
+  let sensor = sim_sensor.clone()
+      .observable(nt.topic("/elevator/heightsensor"));
 
-  let carriage_mass = 12.0 * kilogram;
+  let params = ElevatorParams {
+    angle_from_horizon: 90.0 * degree,
+    carriage_mass: 12.0 * kilogram,
+    limits: (0.0 * meter, 1.2 * meter),
+  };
 
-  let mut control_filter = ChainedFiltersA::new(
-    PID::<Length, Voltage, Time>::new(
+  let elevator = ElevatorImpl::new(
+    params,
+    0.02 * meter,
+    Box::new(motor),
+    Box::new(motor_model.clone()),
+    Box::new(sensor.to_stateful()),
+    (None, None),
+    Box::new(PID::new(
       (12.0 * volt) / (0.25 * meter),
       (1.0 * volt) / (0.5 * meter * (1.0 * second)),
       Zero::zero(),
       0.5 * meter,
       10
-    ).tunable(nt.topic("/pid")),
-    OffsetFeedforwardFilter::new(
-      motor_model.voltage(carriage_mass * (9.81 * meters_per_second2), 0.0 * meters_per_second)
-    )
+    ).tunable(nt.topic("/elevator/pid"))),
+    Box::new(RMSStabilityFilter::new(0.05 * meter, Some(0.1 * meters_per_second), 10))
   );
 
-  let current_publisher = nt.topic("/sim/current").publish();
-  let mut speed = 0.0 * meters_per_second;
-  let mut last_time = robot_rs::time::now();
+  let elevator_system = system!(elevator.frontend());
 
-  while state.running() {
-    let now = robot_rs::time::now();
-    let dt = now - last_time;
+  #[cfg(simulation)]
+  let mut elevator_sim = ElevatorSim::new(
+    params,
+    Box::new(sim_motor),
+    Box::new(motor_model),
+    Box::new(sim_sensor),
+    (None, None)
+  );
 
-    let demand = control_filter.calculate(sensor.get_displacement(), now);
-    motor.set_voltage(demand, now);
-
-    let force = motor_model.force(sim_motor.get_actuator_value().0, speed);
-    let current = motor_model.current(force);
-    let accel = force / carriage_mass - 9.81 * meters_per_second2;
-    speed += accel * dt;
-
-    let mut new_displacement = sim_sensor.get_displacement() + speed * dt;
-    if new_displacement < 0.0 * meter {
-      new_displacement = 0.0 * meter;
-      speed = 0.0 * meters_per_second;
-    }
-    sim_sensor.set_sensor_value(new_displacement, now);
-
-    current_publisher.set(current.to_f64()).ok();
-
-    last_time = now;
-    std::thread::sleep(Duration::from_millis(1));
-  }
+  tokio_scoped::scope(|scope| {
+    scope.spawn(async move {
+      // This is where you'd put your robot control loop, or perhaps a new function 
+      // that runs in a time-controlled loop
+      perform!(elevator_system, Priority(1), |sys| async move { sys.go_to_height_wait(1.0 * meter).await; }.boxed());
+    });
+    scope.spawn(elevator.run_async(10.0 * millisecond));
+    scope.spawn(elevator_sim.run(5.0 * millisecond));
+  });
 
   Ok(())
 }
 
-robot_main!(my_robot);
+robot_main!(async my_robot);

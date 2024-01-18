@@ -123,7 +123,7 @@ pub mod sim {
 
   use super::Actuator;
 
-  pub trait ReadableActuator<U, Time> : Actuator<U, Time> {
+  pub trait SimActuator<U, Time> : Actuator<U, Time> {
     fn get_actuator_value(&self) -> (U, Time);
   }
 
@@ -144,7 +144,7 @@ pub mod sim {
     }
   }
 
-  impl<U: Clone, Time: Clone> ReadableActuator<U, Time> for SimulatedActuator<U, Time> {
+  impl<U: Clone, Time: Clone> SimActuator<U, Time> for SimulatedActuator<U, Time> {
     fn get_actuator_value(&self) -> (U, Time) {
       self.demand.read().unwrap().clone()
     }

@@ -258,12 +258,12 @@ impl<U: Neg<Output = U>, T: StatefulSensor<U>> StatefulSensorExt<U> for T {
 pub mod sim {
   use std::sync::{RwLock, Arc};
 
-  use robot_rs_units::Time;
+use robot_rs_units::Time;
 
-  use super::Sensor;
+  use super::{Sensor, StatefulSensor};
 
-  pub trait SettableSensor<U> : Sensor<U> {
-    fn set_sensor_value(&self, value: U, time: Time);
+  pub trait SimSensor<U>: Sensor<U> {
+    fn set_sensor_value(&mut self, value: U, time: Time);
   }
 
   #[derive(Debug, Clone)]
@@ -277,8 +277,8 @@ pub mod sim {
     }
   }
 
-  impl<U: Clone> SettableSensor<U> for SimulatedSensor<U> {
-    fn set_sensor_value(&self, value: U, time: Time) {
+  impl<U: Clone> SimSensor<U> for SimulatedSensor<U> {
+    fn set_sensor_value(&mut self, value: U, time: Time) {
       *self.value.write().unwrap() = (value, time);
     }
   }

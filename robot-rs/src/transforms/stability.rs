@@ -1,29 +1,26 @@
 use std::{ops::{Mul, Div, Sub, Add}, collections::VecDeque};
 
 use num_traits::Zero;
+use robot_rs_units::traits::ToFloat;
 
 use super::StatefulTransform;
 
 // TODO: Make this actual RMS
 
 pub struct RMSStabilityFilter<I: Mul<I> + Div<Time>, Time>
-where
-  <I as Div<Time>>::Output: Mul<<I as Div<Time>>::Output>
 {
-  pub error_thresh: <I as Mul<I>>::Output,
-  pub deriv_thresh: Option<<<I as Div<Time>>::Output as Mul<<I as Div<Time>>::Output>>::Output>,
+  pub error_thresh: I,
+  pub deriv_thresh: Option<<I as Div<Time>>::Output>,
   history: VecDeque<(I, Time)>,
   deriv_history: VecDeque<<I as Div<Time>>::Output>,
   history_len: usize
 }
 
 impl<I: Mul<I> + Div<Time>, Time> RMSStabilityFilter<I, Time>
-where
-  <I as Div<Time>>::Output: Mul<<I as Div<Time>>::Output>
 {
   pub fn new(
-    error_thresh: <I as Mul<I>>::Output,
-    deriv_thresh: Option<<<I as Div<Time>>::Output as Mul<<I as Div<Time>>::Output>>::Output>,
+    error_thresh: I,
+    deriv_thresh: Option<<I as Div<Time>>::Output>,
     history_len: usize
   ) -> Self {
     Self {
@@ -38,11 +35,8 @@ where
 
 impl<I: Mul<I> + Div<Time>, Time> StatefulTransform<I, Time> for RMSStabilityFilter<I, Time>
 where
-  I: Copy + Sub<I, Output = I> + Zero,
-  <I as Mul<I>>::Output: Add<<I as Mul<I>>::Output, Output = <I as Mul<I>>::Output> + Zero + PartialOrd<<I as Mul<I>>::Output>,
-  <I as Div<Time>>::Output: Mul<<I as Div<Time>>::Output> + Copy,
-  // Good god, I need to alias this
-  <<I as Div<Time>>::Output as Mul<<I as Div<Time>>::Output>>::Output: Copy + Zero + Add<<<I as Div<Time>>::Output as Mul<<I as Div<Time>>::Output>>::Output, Output = <<I as Div<Time>>::Output as Mul<<I as Div<Time>>::Output>>::Output> + PartialOrd<<<I as Div<Time>>::Output as Mul<<I as Div<Time>>::Output>>::Output>,
+  I: ToFloat + Sub<I, Output = I> + Copy,
+  <I as Div<Time>>::Output: ToFloat + Copy,
   Time: Copy + Sub<Time, Output = Time>
 {
   type Output = bool;
@@ -58,20 +52,20 @@ where
       self.history.pop_front();
     }
     while self.deriv_history.len() > self.history_len - 1 {
-      self.history.pop_front();
+      self.deriv_history.pop_front();
     }
 
     let error_ok = if self.history.len() >= self.history_len {
-      let rms_error = self.history.iter().map(|x| x.0 * x.0).fold(Zero::zero(), |a: <I as Mul<I>>::Output, b| a + b);
-      rms_error <= self.error_thresh
+      let rms_error = self.history.iter().map(|x| x.0.to_f64() * x.0.to_f64()).fold(0.0, |a, b| a + b) / (self.history.len() as f64);
+      rms_error.sqrt() <= self.error_thresh.to_f64()
     } else {
       false
     };
 
     let deriv_ok = match (self.deriv_thresh, self.deriv_history.len()) {
       (Some(thresh), i) if i >= (self.history_len - 1) => {
-        let rms_deriv = self.deriv_history.iter().map(|x| *x * *x).fold(Zero::zero(), |a: <<I as Div<Time>>::Output as Mul<<I as Div<Time>>::Output>>::Output, b| a + b);
-        rms_deriv <= thresh
+        let rms_deriv = self.deriv_history.iter().map(|x| x.to_f64() * x.to_f64()).fold(0.0, |a, b| a + b) / (self.deriv_history.len() as f64);
+        rms_deriv.sqrt() <= thresh.to_f64()
       },
       (None, _) => true,
       _ => false
