@@ -42,7 +42,6 @@ async fn my_robot(_state: RobotState) -> RobotResult {
 
   let elevator_system = system!(elevator.frontend());
 
-  #[cfg(simulation)]
   let mut elevator_sim = ElevatorSim::new(
     params,
     Box::new(sim_motor),
