@@ -260,7 +260,7 @@ pub mod sim {
 
 use robot_rs_units::Time;
 
-  use super::{Sensor, StatefulSensor};
+  use super::Sensor;
 
   pub trait SimSensor<U>: Sensor<U> {
     fn set_sensor_value(&mut self, value: U, time: Time);
@@ -299,10 +299,9 @@ mod tests {
   use std::{sync::{Arc, Mutex}, time::Duration};
 
   use approx::assert_relative_eq;
-  use num_traits::Zero;
   use robot_rs_units::motion::meters_per_second;
 
-  use crate::{units::*, sensors::{TransformedSensor, TransformedStatefulSensor, SensorExt, StatefulSensor}, transforms::diff::DifferentiatingTransform, time};
+  use crate::{units::*, sensors::{TransformedStatefulSensor, SensorExt, StatefulSensor}, transforms::diff::DifferentiatingTransform};
   use super::Sensor;
 
   struct MockSensor {

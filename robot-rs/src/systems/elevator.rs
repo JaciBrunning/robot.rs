@@ -3,7 +3,7 @@ use std::{sync::{RwLock, Arc}, time::Duration};
 use num_traits::Zero;
 use robot_rs_units::{Length, electrical::Voltage, Time, Angle, Mass, QuantityBase, millisecond, motion::{meters_per_second2, meters_per_second}, traits::{Angle as _, MaybeUnitNumber}};
 
-use crate::{actuators::{Actuator, VoltageActuator}, physics::motor::SpooledMotorForwardDynamics, sensors::{StatefulBinarySensor, StatefulDisplacementSensor}, transforms::{StatefulTransform, HasSetpoint}, start::RobotResult, time::now};
+use crate::{actuators::VoltageActuator, physics::motor::SpooledMotorForwardDynamics, sensors::{StatefulBinarySensor, StatefulDisplacementSensor}, transforms::{StatefulTransform, HasSetpoint}, time::now};
 
 pub trait Elevator {
   fn go_idle(&mut self);
@@ -116,22 +116,21 @@ impl ElevatorImpl {
       self.limit_switches.1.as_mut().map(|x| x.get_sensor_value()).unwrap_or(false),
     );
 
-    let mut demand_voltage = Zero::zero();
     let mut state = self.frontend.state.read().unwrap().clone();
     let current_demand = self.frontend.demand.read().unwrap().clone();
 
-    match current_demand {
+    let mut demand_voltage = match current_demand {
       ElevatorDemand::Disabled => {
         state = ElevatorState::Disabled;
-        demand_voltage = Zero::zero();
+        Zero::zero()
       },
       ElevatorDemand::Idle => {
         state = ElevatorState::Idle { height: current_height };
-        demand_voltage = Zero::zero();
+        Zero::zero()
       },
       ElevatorDemand::Manual { voltage } => {
         state = ElevatorState::Manual { voltage };
-        demand_voltage = voltage;
+        voltage
       },
       ElevatorDemand::Height { height: target } => {
         self.controller.set_setpoint(target);
@@ -147,16 +146,16 @@ impl ElevatorImpl {
             }
           },
         }
-
-        demand_voltage = self.controller.calculate(current_height, measurement_time);
-
+        
         if self.stability_filter.calculate(target - current_height, measurement_time) {
           state = ElevatorState::Stable { height: current_height, demand: target }
         } else {
           state = ElevatorState::Moving { height: current_height, demand: target }
         }
+
+        self.controller.calculate(current_height, measurement_time)
       }
-    }
+    };
 
     match (limits_hit, demand_voltage) {
       ((true, false), voltage) if voltage < Zero::zero() => {
@@ -281,7 +280,7 @@ pub mod sim {
     pub fn tick(&mut self, time: Time) {
       if let Some(last_time) = self.last_tick {
         let dt = time - last_time;
-        let (demand_volts, demand_time) = self.actuator.get_actuator_value();
+        let (demand_volts, _demand_time) = self.actuator.get_actuator_value();
 
         let force = self.motor_model.force(demand_volts, self.speed);
         let accel = force / self.params.carriage_mass - 9.81 * self.params.angle_from_horizon.sin() * meters_per_second2;
