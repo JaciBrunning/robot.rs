@@ -4,6 +4,7 @@ members = [
   "cargo-robot",
   "robot-rs",
   "ntcore-rs",
+  "ntcore-rs-macros",
   "robot-rs-build-utils",
   "robot-rs-ntcore-sys",
   "robot-rs-wpilib-sys",

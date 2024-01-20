@@ -6,8 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bytes = "1.5.0"
 dashmap = "5.5.3"
 robot-rs-ntcore-sys = { path = "../robot-rs-ntcore-sys" }
+ntcore-rs-macros = { path = "../ntcore-rs-macros" }
 
 [build-dependencies]
 robot-rs-build-utils = { path = "../robot-rs-build-utils" }

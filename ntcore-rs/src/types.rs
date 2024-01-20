@@ -1,16 +1,20 @@
 use std::{slice, error::Error, fmt::Display, ffi::CString};
 
+use robot_rs_ntcore_sys::NT_DisposeValue;
+
 use crate::nt_internal::{NT_Type, NT_Value, NT_Now, NT_String};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum NTError {
-  TypeMismatch
+  TypeMismatch,
+  Other(Box<dyn Error>)
 }
 
 impl Display for NTError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       NTError::TypeMismatch => write!(f, "Type Mismatch"),
+      NTError::Other(other) => other.fmt(f),
     }
   }
 }
@@ -92,7 +96,7 @@ pub enum NTValue {
 }
 
 impl From<NT_Value> for NTValue {
-  fn from(value: NT_Value) -> Self {
+  fn from(mut value: NT_Value) -> Self {
     let data = match value.type_ {
       NT_Type::NT_UNASSIGNED => NTValue::Unassigned,
       NT_Type::NT_BOOLEAN => NTValue::Boolean(unsafe { value.data.v_boolean != 0 }),
@@ -125,6 +129,8 @@ impl From<NT_Value> for NTValue {
         unsafe { slice::from_raw_parts(value.data.arr_float.arr, value.data.arr_float.size as usize).into() }
       }),
     };
+
+    unsafe { NT_DisposeValue((&mut value) as *mut NT_Value) };
 
     data
   }

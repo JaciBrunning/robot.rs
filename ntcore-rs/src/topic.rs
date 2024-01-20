@@ -2,10 +2,13 @@ use std::ffi::CString;
 use std::marker::PhantomData;
 use std::mem::size_of;
 
-use robot_rs_ntcore_sys::{NT_Subscriber, NT_Unsubscribe, NT_Subscribe, NT_PubSubOptions, NT_Publish, NT_Unpublish, NT_Publisher, NT_GetEntryEx, NT_GetEntryValue, NT_Value, NT_Entry, NT_SetEntryValue, NT_Inst};
+use bytes::BytesMut;
+use robot_rs_ntcore_sys::{NT_Subscriber, NT_Unsubscribe, NT_Subscribe, NT_PubSubOptions, NT_Publish, NT_Unpublish, NT_Publisher, NT_GetEntryEx, NT_GetEntryValue, NT_Value, NT_Entry, NT_SetEntryValue, NT_Inst, NT_PublishEx, NT_AddSchema};
 
+use crate::NTValue;
 use crate::nt_internal::{NT_Topic, NT_GetTopic, NT_GetTopicType, NT_GetTopicTypeString, NT_SetTopicPersistent, NT_GetTopicPersistent, NT_SetTopicRetained, NT_GetTopicRetained, NT_GetTopicExists};
 
+use crate::nt_structs::NTStruct;
 use crate::types::{Value, NTError, NTResult};
 use crate::{instance::NetworkTableInstance, types::Type};
 
@@ -23,11 +26,11 @@ const DEFAULT_PUBSUB: NT_PubSubOptions = NT_PubSubOptions {
   excludeSelf: 0,
 };
 
-pub trait GenericSubscriber<V: Value> {
+pub trait GenericSubscriber<V> {
   fn get(&self) -> Option<NTResult<V>>;
 }
 
-pub trait GenericPublisher<V: Value> {
+pub trait GenericPublisher<V> {
   fn set(&self, v: V) -> NTResult<()>;
 }
 
@@ -110,6 +113,64 @@ impl<V: Value> Drop for Entry<V> {
   }
 }
 
+pub struct StructSubscriber<T: NTStruct> {
+  handle: NT_Subscriber,
+  value_t: PhantomData<T>
+}
+
+impl<T: NTStruct> GenericSubscriber<T> for StructSubscriber<T> {
+  fn get(&self) -> Option<NTResult<T>> {
+    let mut value = NT_Value::default();
+    unsafe { NT_GetEntryValue(self.handle, &mut value) }
+    match value.type_ {
+      robot_rs_ntcore_sys::NT_Type::NT_UNASSIGNED => None,
+      _ => {
+        let v = Vec::<u8>::from_nt(value.into());
+        match v {
+          Ok(v) => {
+            let mut bytes = BytesMut::from(&v[..]);
+            Some(T::read(&mut bytes).map_err(NTError::Other))
+          },
+          Err(e) => Some(Err(e)),
+        }
+      }
+    }
+  }
+}
+
+impl<T: NTStruct> Drop for StructSubscriber<T> {
+  fn drop(&mut self) {
+    unsafe { NT_Unsubscribe(self.handle) }
+  }
+}
+
+pub struct StructPublisher<T: NTStruct> {
+  handle: NT_Publisher,
+  value_t: PhantomData<T>
+}
+
+impl<T: NTStruct> GenericPublisher<T> for StructPublisher<T> {
+  fn set(&self, v: T) -> NTResult<()> {
+    let mut bytes = BytesMut::with_capacity(128);
+    v.write(&mut bytes).map_err(NTError::Other)?;
+    let raw = NTValue::Raw(bytes.to_vec());
+    raw.with_nt_value(|ntval| {
+      if (unsafe { NT_SetEntryValue(self.handle, &ntval) }) == 0 {
+        Err(NTError::TypeMismatch)
+      } else {
+        Ok(())
+      }
+    })?;
+    Ok(())
+  }
+}
+
+impl<T: NTStruct> Drop for StructPublisher<T> {
+  fn drop(&mut self) {
+    unsafe { NT_Unpublish(self.handle) }
+  }
+}
+
 pub struct Topic {
   handle: NT_Topic,
   name: String,
@@ -182,5 +243,19 @@ impl Topic {
     let ts = CString::new(V::NT_TYPE_STRING.to_owned()).unwrap();
     let e = unsafe { NT_GetEntryEx(self.handle, V::NT_TYPE.into(), ts.as_ptr(), &DEFAULT_PUBSUB) };
     Entry { handle: e, value_t: PhantomData }
+  }
+
+  pub fn subscribe_struct<T: NTStruct>(&self) -> StructSubscriber<T> {
+    let ts = CString::new(T::get_full_type_string()).unwrap();
+    T::publish_schema(self.instance_handle);
+    let s = unsafe { NT_Subscribe(self.handle, robot_rs_ntcore_sys::NT_Type::NT_RAW, ts.as_ptr(), &DEFAULT_PUBSUB) };
+    StructSubscriber { handle: s, value_t: PhantomData }
+  }
+
+  pub fn publish_struct<T: NTStruct>(&self) -> StructPublisher<T> {
+    let ts = CString::new(T::get_full_type_string()).unwrap();
+    T::publish_schema(self.instance_handle);
+    let p = unsafe { NT_Publish(self.handle, robot_rs_ntcore_sys::NT_Type::NT_RAW, ts.as_ptr(), &DEFAULT_PUBSUB) };
+    StructPublisher { handle: p, value_t: PhantomData }
   }
 }
