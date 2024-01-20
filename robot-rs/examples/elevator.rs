@@ -3,8 +3,8 @@ use std::time::Duration;
 use futures::FutureExt;
 use ntcore_rs::NetworkTableInstance;
 use num_traits::Zero;
-use robot_rs::{systems::elevator::{ElevatorImpl, ElevatorParams, sim::ElevatorSim, AwaitableElevator}, actuators::{sim::SimulatedActuator, ActuatorExt}, sensors::{sim::SimulatedSensor, SensorExt, StatefulSensorExt, StatefulSensor}, physics::motor::{from_dyno::KrakenTrap, MotorExtensionTrait}, transforms::{pid::PID, stability::RMSStabilityFilter, diff::DifferentiatingTransform, linear::LinearTransforms}, start::{RobotResult, RobotState}, robot_main, system, perform, activity::Priority};
-use robot_rs_units::{kilogram, degree, meter, electrical::volt, Length, inch, motion::meters_per_second, second, millisecond};
+use robot_rs::{systems::elevator::{ElevatorImpl, ElevatorParams, sim::ElevatorSim, AwaitableElevator}, actuators::{sim::SimulatedActuator, ActuatorExt}, sensors::{sim::SimulatedSensor, SensorExt, StatefulSensorExt, StatefulSensor}, physics::motor::{from_dyno::KrakenTrap, MotorExtensionTrait}, transforms::{pid::PID, stability::RMSStabilityFilter, diff::DifferentiatingTransform, linear::LinearTransforms, profile::{Profiled1stOrderController, TrapezoidalProfile, ProfileState, ProfileFeedForward}, TransformExt}, start::{RobotResult, RobotState}, robot_main, system, perform, activity::Priority};
+use robot_rs_units::{kilogram, degree, meter, electrical::{volt, Voltage}, Length, inch, motion::{meters_per_second, meters_per_second2}, second, millisecond, Time};
 
 async fn my_robot(_state: RobotState) -> RobotResult {
   let nt = NetworkTableInstance::default();
@@ -29,6 +29,18 @@ async fn my_robot(_state: RobotState) -> RobotResult {
     carriage_mass: 12.0 * kilogram,
     limits: (0.0 * meter, 1.2 * meter),
   };
+  
+  let controller = Profiled1stOrderController::new(
+    TrapezoidalProfile::new(0.5 * meters_per_second, 1.0 * meters_per_second2, ProfileState::zero()),
+    PID::<Length, Voltage, Time>::new(
+      (12.0 * volt) / (0.25 * meter),
+      Zero::zero(),
+      Zero::zero(),
+      0.5 * meter,
+      10
+    ).tunable(nt.topic("/elevator/pid")),
+    ProfileFeedForward::new(12.0 * volt / (1.0 * meters_per_second), 0.0 * volt / (1.0 * meters_per_second2)).to_stateful()
+  );
 
   let elevator = ElevatorImpl::new(
     params,
@@ -37,13 +49,7 @@ async fn my_robot(_state: RobotState) -> RobotResult {
     Box::new(motor_model.clone()),
     Box::new(sensor.to_stateful()),
     (None, None),
-    Box::new(PID::new(
-      (12.0 * volt) / (0.25 * meter),
-      (1.0 * volt) / (0.5 * meter * (1.0 * second)),
-      Zero::zero(),
-      0.5 * meter,
-      10
-    ).tunable(nt.topic("/elevator/pid"))),
+    Box::new(controller),
     Box::new(RMSStabilityFilter::new(0.05 * meter, Some(0.1 * meters_per_second), 10))
   );
 

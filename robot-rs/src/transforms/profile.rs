@@ -1,4 +1,4 @@
-use std::ops::{Div, Mul, Neg};
+use std::{ops::{Div, Mul, Neg, Add}, marker::PhantomData};
 
 use num_traits::Zero;
 use robot_rs_units::traits::MaybeUnitNumber;
@@ -12,9 +12,9 @@ pub type KV<Output, Vel> = <Output as Div<Vel>>::Output;
 pub type KA<Output, Vel, Time> = <Output as Div<Acceleration<Vel, Time>>>::Output;
 
 #[derive(Clone, Copy)]
-pub struct ProfileState<Vel: Div<Time> + Mul<Time>, Time>
+pub struct ProfileState<Vel, Time>
 where
-  Vel: Copy,
+  Vel: Div<Time> + Mul<Time> + Copy,
   Displacement<Vel, Time>: Copy,
   Acceleration<Vel, Time>: Copy,
 {
@@ -22,6 +22,18 @@ where
   pub displacement: Displacement<Vel, Time>,
   pub velocity: Vel,
   pub acceleration: Acceleration<Vel, Time>,    // Ignored in setpoint (for trapezoidal profiles)
+}
+
+impl<Vel, Time> ProfileState<Vel, Time>
+where
+  Vel: Div<Time> + Mul<Time> + Copy + Zero,
+  Displacement<Vel, Time>: Copy + Zero,
+  Acceleration<Vel, Time>: Copy + Zero,
+  Time: Zero,
+{
+  pub fn zero() -> Self {
+    Self { time: Zero::zero(), displacement: Zero::zero(), velocity: Zero::zero(), acceleration: Zero::zero() }
+  }
 }
 
 pub struct TrapezoidalProfile<Vel: Div<Time> + Mul<Time>, Time>
@@ -141,6 +153,90 @@ where
 
   fn calculate(&self, input: ProfileState<Vel, Time>) -> Self::Output {
     self.kv * input.velocity + self.ka * input.acceleration
+  }
+}
+
+pub struct Profiled1stOrderController<Vel, Output, Time, Profile, Controller, Feedforward>
+where
+  Profile: StatefulTransform<ProfileState<Vel, Time>, Time, Output = ProfileState<Vel, Time>>,
+  Controller: StatefulTransform<Displacement<Vel, Time>, Time, Output = Output>,
+  Feedforward: StatefulTransform<ProfileState<Vel, Time>, Time, Output = Output>,
+  Vel: Div<Time> + Mul<Time> + Copy,
+  Displacement<Vel, Time>: Copy,
+  Acceleration<Vel, Time>: Copy,
+{
+  profile: Profile,
+  controller: Controller,
+  feedforward: Feedforward,
+  last_state: Option<ProfileState<Vel, Time>>,
+  phantom: PhantomData<Output>,
+}
+
+impl<Vel, Output, Time, Profile, Controller, Feedforward> Profiled1stOrderController<Vel, Output, Time, Profile, Controller, Feedforward>
+where
+  Profile: StatefulTransform<ProfileState<Vel, Time>, Time, Output = ProfileState<Vel, Time>>,
+  Controller: StatefulTransform<Displacement<Vel, Time>, Time, Output = Output>,
+  Feedforward: StatefulTransform<ProfileState<Vel, Time>, Time, Output = Output>,
+  Vel: Div<Time> + Mul<Time> + Copy,
+  Displacement<Vel, Time>: Copy,
+  Acceleration<Vel, Time>: Copy,
+{
+  pub fn new(profile: Profile, controller: Controller, feedforward: Feedforward) -> Self {
+    Self { profile, controller, feedforward, last_state: None, phantom: PhantomData }
+  }
+}
+
+impl<Vel, Output, Time, Profile, Controller, Feedforward> HasSetpoint<Displacement<Vel, Time>> for Profiled1stOrderController<Vel, Output, Time, Profile, Controller, Feedforward>
+where
+  Profile: StatefulTransform<ProfileState<Vel, Time>, Time, Output = ProfileState<Vel, Time>> + HasSetpoint<ProfileState<Vel, Time>>,
+  Controller: StatefulTransform<Displacement<Vel, Time>, Time, Output = Output>,
+  Feedforward: StatefulTransform<ProfileState<Vel, Time>, Time, Output = Output>,
+  Vel: Div<Time> + Mul<Time> + Copy,
+  Displacement<Vel, Time>: Copy,
+  Acceleration<Vel, Time>: Copy,
+  Time: Zero,
+  Vel: Zero,
+  Acceleration<Vel, Time>: Zero
+{
+  fn set_setpoint(&mut self, sp: Displacement<Vel, Time>) {
+    self.profile.set_setpoint(ProfileState { time: Zero::zero(), displacement: sp, velocity: Zero::zero(), acceleration: Zero::zero() })
+  }
+}
+
+impl<Vel, Output, Time, Profile, Controller, Feedforward> StatefulTransform<Displacement<Vel, Time>, Time> for Profiled1stOrderController<Vel, Output, Time, Profile, Controller, Feedforward>
+where
+  Profile: StatefulTransform<ProfileState<Vel, Time>, Time, Output = ProfileState<Vel, Time>> + HasSetpoint<ProfileState<Vel, Time>>,
+  Controller: StatefulTransform<Displacement<Vel, Time>, Time, Output = Output> + HasSetpoint<Displacement<Vel, Time>>,
+  Feedforward: StatefulTransform<ProfileState<Vel, Time>, Time, Output = Output>,
+  Vel: Div<Time> + Mul<Time> + Copy + Zero,
+  Displacement<Vel, Time>: Copy + Zero,
+  Acceleration<Vel, Time>: Copy + Zero,
+  Output: Zero + Add<Output, Output = Output>,
+  Time: Copy,
+  ProfileState<Vel, Time>: Clone,
+{
+  type Output = Output;
+
+  fn calculate(&mut self, input: Displacement<Vel, Time>, time: Time) -> Self::Output {
+    match self.last_state.clone() {
+      Some(last) => {
+        let next_state = self.profile.calculate(last, time);
+        self.controller.set_setpoint(next_state.displacement);
+        self.last_state = Some(next_state.clone());
+        self.controller.calculate(input, time) + self.feedforward.calculate(next_state, time)
+      },
+      None => {
+        self.last_state = Some(ProfileState { time, displacement: input, velocity: Zero::zero(), acceleration: Zero::zero() });
+        Zero::zero()
+      },
+    }
+  }
+
+  fn reset(&mut self) {
+    self.profile.reset();
+    self.controller.reset();
+    self.feedforward.reset();
+    self.last_state = None;
   }
 }
 

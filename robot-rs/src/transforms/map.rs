@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use super::{Transform, StatefulTransform};
+use super::{Transform, StatefulTransform, HasSetpoint};
 
 #[derive(Clone)]
 pub struct MapTransform<F: Fn(I) -> O, I, O> {
