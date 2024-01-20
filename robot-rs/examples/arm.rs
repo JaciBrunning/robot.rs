@@ -10,7 +10,7 @@ async fn my_robot(_state: RobotState) -> RobotResult {
   let nt = NetworkTableInstance::default();
   let sim_motor = SimulatedActuator::new(0.0 * volt, robot_rs::time::now());
   let sim_sensor = SimulatedSensor::<Angle>::new(0.0 * degree);
-  let motor_model = KrakenTrap().geared(180.0).multiply(2);
+  let motor_model = KrakenTrap().geared(120.0).multiply(2);
 
   let velocity_sensor = sim_sensor.clone().to_stateful()
       .transform(DifferentiatingTransform::new())
@@ -20,7 +20,7 @@ async fn my_robot(_state: RobotState) -> RobotResult {
   let motor = sim_motor.clone()
       .observable(nt.topic("/arm/motor"))
       .clamp(-12.0 * volt, 12.0 * volt)
-      .transform(CurrentLimitTransform::new(60.0 * ampere, velocity_sensor, motor_model.clone()));
+      .transform(CurrentLimitTransform::new(90.0 * ampere, velocity_sensor, motor_model.clone()));
 
   let sensor = sim_sensor.clone()
       .observable(nt.topic("/arm/angle"));

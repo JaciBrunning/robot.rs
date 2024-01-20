@@ -222,7 +222,7 @@ pub mod sim {
 
 use ntcore_rs::GenericPublisher as _;
 use num_traits::Zero;
-use robot_rs_units::{Time, electrical::{Voltage, volt}, Angle, motion::{AngularVelocity, meters_per_second2, rads_per_second}, millisecond, QuantityBase as _, traits::{Angle as _, MaybeUnitNumber as _}, radian, force::newton_meter, ampere};
+use robot_rs_units::{Time, electrical::{Voltage, volt}, Angle, motion::{AngularVelocity, meters_per_second2, degrees_per_second}, millisecond, QuantityBase as _, traits::{Angle as _, MaybeUnitNumber as _}, radian, force::newton_meter, ampere, degree};
 
   use crate::{actuators::sim::SimActuator, physics::motor::MotorDynamics, sensors::sim::SimSensor, time::now};
 
@@ -310,8 +310,8 @@ use robot_rs_units::{Time, electrical::{Voltage, volt}, Angle, motion::{AngularV
         self.pub_demand.set(demand_volts.to::<volt>()).ok();
         self.pub_torque.set(torque.to::<newton_meter>()).ok();
         self.pub_current.set(current_draw.to::<ampere>()).ok();
-        self.pub_speed.set(self.speed.to::<rads_per_second>()).ok();
-        self.pub_angle.set(new_angle.to::<radian>()).ok();
+        self.pub_speed.set(self.speed.to::<degrees_per_second>()).ok();
+        self.pub_angle.set(new_angle.to::<degree>()).ok();
 
         self.angle_sensor.set_sensor_value(new_angle, time);
       }
