@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub, Mul, Div};
+use std::ops::{Add, Sub, Mul, Div, Neg};
 
 use num_traits::{Zero, Float};
 
@@ -50,7 +50,7 @@ pub fn tan<A: Angle>(angle: A) -> f64 {
   angle.tan()
 }
 
-pub trait MaybeUnitNumber : Zero + Add<Self, Output = Self> + Sub<Self, Output = Self> + Mul<f64, Output = Self> + Div<f64, Output = Self> + PartialOrd<Self> {
+pub trait MaybeUnitNumber : Zero + Add<Self, Output = Self> + Sub<Self, Output = Self> + Mul<f64, Output = Self> + Div<f64, Output = Self> + Neg<Output = Self> + PartialOrd<Self> {
   fn one() -> Self;
   fn abs(self) -> Self;
   fn signum(self) -> Self;

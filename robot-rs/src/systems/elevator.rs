@@ -49,7 +49,7 @@ pub enum ElevatorState {
 
 #[derive(Clone, Debug)]
 pub struct ElevatorFrontend {
-  demand: Arc<RwLock<ElevatorDemand>>,
+  demand: Arc<RwLock<(ElevatorDemand, /* is it new? */ bool)>>,
   state: Arc<RwLock<ElevatorState>>,
 }
 
@@ -65,7 +65,6 @@ impl<T: StatefulTransform<Length, Time, Output=Voltage> + HasSetpoint<Length>> C
 
 pub struct ElevatorImpl {
   params: ElevatorParams,
-  new_setpoint_thresh: Length,
 
   actuator: Box<dyn VoltageActuator + Send + Sync>,
   motor_model: Box<dyn SpooledMotorForwardDynamics + Send + Sync>,
@@ -81,7 +80,6 @@ pub struct ElevatorImpl {
 impl ElevatorImpl {
   pub fn new(
     params: ElevatorParams,
-    new_setpoint_thresh: Length,
     actuator: Box<dyn VoltageActuator + Send + Sync>,
     motor_model: Box<dyn SpooledMotorForwardDynamics + Send + Sync>,
     height_sensor: Box<dyn StatefulDisplacementSensor + Send + Sync>,
@@ -91,12 +89,11 @@ impl ElevatorImpl {
   ) -> Self {
     Self {
       params,
-      new_setpoint_thresh,
       actuator, motor_model, height_sensor, 
       limit_switches,
       controller, stability_filter,
       frontend: ElevatorFrontend {
-        demand: Arc::new(RwLock::new(ElevatorDemand::Disabled)),
+        demand: Arc::new(RwLock::new((ElevatorDemand::Disabled, true))),
         state: Arc::new(RwLock::new(ElevatorState::Disabled))
       }
     }
@@ -120,31 +117,24 @@ impl ElevatorImpl {
     let current_demand = self.frontend.demand.read().unwrap().clone();
 
     let mut demand_voltage = match current_demand {
-      ElevatorDemand::Disabled => {
+      (ElevatorDemand::Disabled, _) => {
         state = ElevatorState::Disabled;
         Zero::zero()
       },
-      ElevatorDemand::Idle => {
+      (ElevatorDemand::Idle, _) => {
         state = ElevatorState::Idle { height: current_height };
         Zero::zero()
       },
-      ElevatorDemand::Manual { voltage } => {
+      (ElevatorDemand::Manual { voltage }, _) => {
         state = ElevatorState::Manual { voltage };
         voltage
       },
-      ElevatorDemand::Height { height: target } => {
+      (ElevatorDemand::Height { height: target }, is_new_demand) => {
         self.controller.set_setpoint(target);
-        match state {
-          ElevatorState::Disabled | ElevatorState::Idle { .. } | ElevatorState::Limited | ElevatorState::Manual { .. } => {
-            self.controller.reset();
-            self.stability_filter.reset();
-          },
-          ElevatorState::Stable { demand, .. } | ElevatorState::Moving { demand, .. } => {
-            // Reset the stability filter so we can detect whether we're stable properly.
-            if (demand - target).abs() >= self.new_setpoint_thresh {
-              self.stability_filter.reset();
-            }
-          },
+        if is_new_demand {
+          self.stability_filter.reset();
+          self.controller.reset();
+          self.frontend.demand.write().unwrap().1 = false;
         }
         
         if self.stability_filter.calculate(target - current_height, measurement_time) {
@@ -183,17 +173,17 @@ impl ElevatorImpl {
 
 impl Elevator for ElevatorImpl {
   fn go_idle(&mut self) {
-    *self.frontend.demand.write().unwrap() = ElevatorDemand::Idle;
+    *self.frontend.demand.write().unwrap() = (ElevatorDemand::Idle, true);
     self.tick(now());
   }
 
   fn go_disabled(&mut self) {
-    *self.frontend.demand.write().unwrap() = ElevatorDemand::Disabled;
+    *self.frontend.demand.write().unwrap() = (ElevatorDemand::Disabled, true);
     self.tick(now());
   }
 
   fn go_to_height(&mut self, height:Length) {
-    *self.frontend.demand.write().unwrap() = ElevatorDemand::Height { height };
+    *self.frontend.demand.write().unwrap() = (ElevatorDemand::Height { height }, true);
     self.tick(now());
   }
 
@@ -204,15 +194,15 @@ impl Elevator for ElevatorImpl {
 
 impl Elevator for ElevatorFrontend {
   fn go_idle(&mut self) {
-    *self.demand.write().unwrap() = ElevatorDemand::Idle;
+    *self.demand.write().unwrap() = (ElevatorDemand::Idle, true);
   }
 
   fn go_disabled(&mut self) {
-    *self.demand.write().unwrap() = ElevatorDemand::Disabled;
+    *self.demand.write().unwrap() = (ElevatorDemand::Disabled, true);
   }
 
   fn go_to_height(&mut self, height:Length) {
-    *self.demand.write().unwrap() = ElevatorDemand::Height { height };
+    *self.demand.write().unwrap() = (ElevatorDemand::Height { height }, true);
   }
 
   fn is_stable(&self) -> bool {

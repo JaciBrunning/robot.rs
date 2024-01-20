@@ -1,4 +1,6 @@
-use robot_rs_units::{electrical::Voltage, motion::{AngularVelocity, Velocity}, force::{Torque, Force}, Quantity, ISQ, typenum::{N1, Z0, N2, P2, P1}, Current, Length, radian};
+use std::ops::Div;
+
+use robot_rs_units::{electrical::Voltage, motion::{AngularVelocity, Velocity, meters_per_second, Acceleration, AngularAcceleration, rads_per_second}, force::{Torque, Force, newton, newton_meter, MOI}, Quantity, ISQ, typenum::{N1, Z0, N2, P2, P1}, Current, Length, radian, Mass};
 
 use crate::traits::Wrapper;
 
@@ -31,6 +33,14 @@ pub trait MotorForwardDynamics {
 pub trait MotorInverseDynamics {
   fn speed(&self, voltage: Voltage, torque: Torque) -> AngularVelocity;
   fn torque(&self, voltage: Voltage, speed: AngularVelocity) -> Torque;
+
+  fn estimate_profile_kv(&self, v_nom: Voltage) -> <Voltage as Div<AngularVelocity>>::Output {
+    v_nom / self.speed(v_nom, 0.0 * newton_meter)
+  }
+
+  fn estimate_profile_ka(&self, moi: MOI, v_nom: Voltage) -> <Voltage as Div<AngularAcceleration>>::Output {
+    v_nom / (self.torque(v_nom, 0.0 * rads_per_second) / moi * (1.0 * radian))
+  }
 }
 
 pub trait MotorCurrentDynamics {
@@ -45,6 +55,14 @@ pub trait SpooledMotorForwardDynamics {
 pub trait SpooledMotorInverseDynamics {
   fn velocity(&self, voltage: Voltage, force: Force) -> Velocity;
   fn force(&self, voltage: Voltage, velocity: Velocity) -> Force;
+
+  fn estimate_profile_kv(&self, v_nom: Voltage) -> <Voltage as Div<Velocity>>::Output {
+    v_nom / self.velocity(v_nom, 0.0 * newton)
+  }
+
+  fn estimate_profile_ka(&self, mass: Mass, v_nom: Voltage) -> <Voltage as Div<Acceleration>>::Output {
+    v_nom / (self.force(v_nom, 0.0 * meters_per_second) / mass)
+  }
 }
 
 pub trait SpooledMotorCurrentDynamics {

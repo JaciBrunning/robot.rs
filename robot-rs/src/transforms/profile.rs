@@ -1,7 +1,9 @@
-use std::{ops::{Div, Mul, Neg, Add}, marker::PhantomData};
+use std::{ops::{Div, Mul, Neg, Add}, marker::PhantomData, fmt::Display};
 
 use num_traits::Zero;
-use robot_rs_units::traits::MaybeUnitNumber;
+use robot_rs_units::{traits::{MaybeUnitNumber, ToFloat, FromFloat}, motion::{Velocity, AngularVelocity}, Time, electrical::{volt, Voltage}, Mass, force::MOI};
+
+use crate::physics::motor::{SpooledMotorInverseDynamics, MotorInverseDynamics};
 
 use super::{StatefulTransform, HasSetpoint, Transform, pid::{PID, Ki, Kd, Derivative, Integral, Kp}};
 
@@ -18,7 +20,6 @@ where
   Displacement<Vel, Time>: Copy,
   Acceleration<Vel, Time>: Copy,
 {
-  pub time: Time,   // Ignored in setpoint
   pub displacement: Displacement<Vel, Time>,
   pub velocity: Vel,
   pub acceleration: Acceleration<Vel, Time>,    // Ignored in setpoint (for trapezoidal profiles)
@@ -32,7 +33,7 @@ where
   Time: Zero,
 {
   pub fn zero() -> Self {
-    Self { time: Zero::zero(), displacement: Zero::zero(), velocity: Zero::zero(), acceleration: Zero::zero() }
+    Self { displacement: Zero::zero(), velocity: Zero::zero(), acceleration: Zero::zero() }
   }
 }
 
@@ -45,6 +46,7 @@ where
   pub max_velocity: Vel,
   pub max_acceleration: Acceleration<Vel, Time>,
   pub setpoint: ProfileState<Vel, Time>,
+  pub start_time: Option<Time>,
 }
 
 impl<Vel: Div<Time> + Mul<Time>, Time> TrapezoidalProfile<Vel, Time>
@@ -54,7 +56,7 @@ where
   Acceleration<Vel, Time>: Copy,
 {
   pub fn new(max_velocity: Vel, max_acceleration: Acceleration<Vel, Time>, setpoint: ProfileState<Vel, Time>) -> Self {
-    Self { max_velocity, max_acceleration, setpoint }
+    Self { max_velocity, max_acceleration, setpoint, start_time: None }
   }
 }
 
@@ -69,52 +71,100 @@ where
   }
 }
 
+fn maybe_flip<Vel, Time>(flip: bool, mut input: ProfileState<Vel, Time>) -> ProfileState<Vel, Time>
+where
+  Vel: Neg<Output = Vel> + Div<Time> + Mul<Time> + Copy,
+  Displacement<Vel, Time>: Neg<Output = Displacement<Vel, Time>> + Copy,
+  Acceleration<Vel, Time>: Neg<Output = Acceleration<Vel, Time>> + Copy,
+{
+  if flip {
+    input.acceleration = - input.acceleration;
+    input.displacement = - input.displacement;
+    input.velocity = - input.velocity;
+  }
+  input
+}
+
 impl<Vel, Time> StatefulTransform<ProfileState<Vel, Time>, Time> for TrapezoidalProfile<Vel, Time>
 where
-  Vel: MaybeUnitNumber + Div<Time> + Mul<Time> + Mul<Vel> + Copy,
-  Time: MaybeUnitNumber + Copy,
+  Vel: MaybeUnitNumber + Div<Time> + Mul<Time> + Mul<Vel> + Div<Acceleration<Vel, Time>, Output = Time> + Copy,
+  Time: MaybeUnitNumber + Mul<Time> + Copy + FromFloat,
+  <Time as Mul<Time>>::Output: Mul<Acceleration<Vel, Time>, Output = Displacement<Vel, Time>>,
   <Vel as Mul<Vel>>::Output: MaybeUnitNumber + Neg<Output = <Vel as Mul<Vel>>::Output> + Div<Acceleration<Vel, Time>, Output = Displacement<Vel, Time>> + Copy,
-  Displacement<Vel, Time>: MaybeUnitNumber + Copy,
-  Acceleration<Vel, Time>: MaybeUnitNumber + Neg<Output = <Vel as Div<Time>>::Output> + Mul<Time, Output = Vel> + Copy,
+  Displacement<Vel, Time>: MaybeUnitNumber + Copy + ToFloat + Div<Vel, Output = Time>,
+  Acceleration<Vel, Time>: MaybeUnitNumber + Neg<Output = <Vel as Div<Time>>::Output> + Mul<Time, Output = Vel> + Copy + ToFloat,
   f64: Mul<Acceleration<Vel, Time>, Output = Acceleration<Vel, Time>> + Mul<Vel, Output = Vel>
 {
   type Output = ProfileState<Vel, Time>;
 
+  // Copied from WPILib's TrapezoidProfile: https://github.com/wpilibsuite/allwpilib/blob/main/wpimath/src/main/native/include/frc/trajectory/TrapezoidProfile.inc
   fn calculate(&mut self, input: ProfileState<Vel, Time>, time: Time) -> Self::Output {
-    let dt = time - input.time;
-    let current_displacement = input.displacement;
-    let current_velocity = input.velocity;
+    let start_time = match self.start_time {
+      None => {
+        self.start_time = Some(time);
+        time
+      },
+      Some(t) => t
+    };
 
-    let displacement_if_decelerate_now = ((self.setpoint.velocity * self.setpoint.velocity) - (current_velocity * current_velocity)) / (2.0 * -self.max_acceleration);
+    let t = time - start_time;
 
-    if displacement_if_decelerate_now + current_displacement >= self.setpoint.displacement {
-      let at = -self.max_acceleration * dt;
-      let new_vel = current_velocity + at;
-      ProfileState {
-        time,
-        velocity: new_vel,
-        displacement: current_displacement + (current_velocity * dt) + 2.0 * at * dt,
+    let flip = input.displacement > self.setpoint.displacement;
+
+    let mut cur = maybe_flip(flip, input);
+    let goal = maybe_flip(flip, self.setpoint);
+
+    if cur.velocity > self.max_velocity {
+      cur.velocity = self.max_velocity;
+    }
+
+    // // Truncated - triangle profile
+    let cutoff_starts = cur.velocity / self.max_acceleration;
+    let cutoff_starts_distance = 0.5 * self.max_acceleration * cutoff_starts * cutoff_starts;
+
+    let cutoff_ends = goal.velocity / self.max_acceleration;
+    let cutoff_ends_distance = 0.5 * self.max_acceleration * cutoff_ends * cutoff_ends;
+
+    let full_trap_dist = cutoff_starts_distance + (goal.displacement - cur.displacement) + cutoff_ends_distance;
+    let mut acceleration_time = self.max_velocity / self.max_acceleration;
+
+    let full_speed_dist = full_trap_dist - acceleration_time * acceleration_time * self.max_acceleration;
+
+    if full_speed_dist < Zero::zero() {
+      acceleration_time = Time::from_f64((full_trap_dist.to_f64() / self.max_acceleration.to_f64()).sqrt());
+    }
+
+    let end_accel = acceleration_time - cutoff_starts;
+    let end_full_speed = end_accel + full_speed_dist / self.max_velocity;
+    let end_decel = end_full_speed + acceleration_time - cutoff_ends;
+
+    if t < end_accel {
+      maybe_flip(flip, ProfileState {
+        displacement: cur.displacement + (cur.velocity + 0.5 * self.max_acceleration * t) * t,
+        velocity: cur.velocity + self.max_acceleration * t,
+        acceleration: self.max_acceleration
+      })
+    } else if t < end_full_speed {
+      maybe_flip(flip, ProfileState {
+        displacement: cur.displacement + (cur.velocity + 0.5 * self.max_acceleration * end_accel) * end_accel + self.max_velocity * (t - end_accel),
+        velocity: self.max_velocity,
+        acceleration: Zero::zero()
+      })
+    } else if t <= end_decel {
+      let remaining_time = end_decel - t;
+      maybe_flip(flip, ProfileState {
+        displacement: goal.displacement - (goal.velocity + 0.5 * self.max_acceleration * remaining_time) * remaining_time,
+        velocity: goal.velocity + self.max_acceleration * remaining_time,
         acceleration: -self.max_acceleration
-      }
+      })
     } else {
-      let mut at = self.max_acceleration * dt;
-      let mut new_vel = current_velocity + at;
-
-      if new_vel > self.max_velocity {
-        new_vel = self.max_velocity;
-        at = new_vel - input.velocity;
-      }
-
-      ProfileState {
-        time, 
-        velocity: new_vel,
-        displacement: current_displacement + (current_velocity * dt) + 2.0 * at * dt,
-        acceleration: if dt > Zero::zero() { at / dt } else { Zero::zero() }
-      }
+      self.setpoint.clone()
     }
   }
 
-  fn reset(&mut self) { }
+  fn reset(&mut self) {
+    self.start_time = None;
+  }
 }
 
 pub struct ProfileFeedForward<
@@ -133,6 +183,18 @@ impl<
 > ProfileFeedForward<Vel, Output, Time> {
   pub fn new(kv: KV<Output, Vel>, ka: KA<Output, Vel, Time>) -> Self {
     Self { kv, ka }
+  }
+}
+
+impl ProfileFeedForward<Velocity, Voltage, Time> {
+  pub fn from_motor_linear<M: SpooledMotorInverseDynamics>(model: M, v_nom: Voltage, mass: Mass) -> Self {
+    Self { kv: model.estimate_profile_kv(v_nom), ka: model.estimate_profile_ka(mass, v_nom) }
+  }
+}
+
+impl ProfileFeedForward<AngularVelocity, Voltage, Time> {
+  pub fn from_motor_angular<M: MotorInverseDynamics>(model: M, v_nom: Voltage, moi: MOI) -> Self {
+    Self { kv: model.estimate_profile_kv(v_nom), ka: model.estimate_profile_ka(moi, v_nom) }
   }
 }
 
@@ -199,7 +261,7 @@ where
   Acceleration<Vel, Time>: Zero
 {
   fn set_setpoint(&mut self, sp: Displacement<Vel, Time>) {
-    self.profile.set_setpoint(ProfileState { time: Zero::zero(), displacement: sp, velocity: Zero::zero(), acceleration: Zero::zero() })
+    self.profile.set_setpoint(ProfileState { displacement: sp, velocity: Zero::zero(), acceleration: Zero::zero() })
   }
 }
 
@@ -226,7 +288,7 @@ where
         self.controller.calculate(input, time) + self.feedforward.calculate(next_state, time)
       },
       None => {
-        self.last_state = Some(ProfileState { time, displacement: input, velocity: Zero::zero(), acceleration: Zero::zero() });
+        self.last_state = Some(ProfileState { displacement: input, velocity: Zero::zero(), acceleration: Zero::zero() });
         Zero::zero()
       },
     }
@@ -239,76 +301,3 @@ where
     self.last_state = None;
   }
 }
-
-// pub struct ProfiledPID<Vel, Output, Time, Profile>
-// where
-//   Vel: Div<Time> + Mul<Time> + Copy,
-//   Output: Div<Vel> + Div<Displacement<Vel, Time>> + Div<<Displacement<Vel, Time> as Mul<Time>>::Output> + Div<Acceleration<Vel, Time>> + Copy,
-//   Displacement<Vel, Time>: Mul<Time> + Div<Time, Output = Vel> + Copy,
-//   <Displacement<Vel, Time> as Mul<Time>>::Output: Copy,
-//   Acceleration<Vel, Time>: Copy,
-//   Profile: StatefulTransform<ProfileState<Vel, Time>, Time, Output = ProfileState<Vel, Time>>
-// {
-//   pid: PID<Displacement<Vel, Time>, Output, Time>,
-//   profile: Profile,
-//   ff: ProfileFeedForward<Vel, Output, Time>,
-// }
-
-// impl<Vel, Output, Time, Profile> ProfiledPID<Vel, Output, Time, Profile>
-// where
-//   Vel: Div<Time> + Mul<Time> + Copy,
-//   Output: Div<Vel> + Div<Displacement<Vel, Time>> + Div<<Displacement<Vel, Time> as Mul<Time>>::Output> + Div<Acceleration<Vel, Time>> + Copy,
-//   Displacement<Vel, Time>: Mul<Time> + Div<Time, Output = Vel> + Copy,
-//   <Displacement<Vel, Time> as Mul<Time>>::Output: Copy,
-//   Acceleration<Vel, Time>: Copy,
-//   Profile: StatefulTransform<ProfileState<Vel, Time>, Time, Output = ProfileState<Vel, Time>>
-// {
-//   pub fn new(pid: PID<Displacement<Vel, Time>, Output, Time>, profile: Profile, ff: ProfileFeedForward<Vel, Output, Time>) -> Self {
-//     Self { pid, ff, profile }
-//   }
-// }
-
-// impl<Vel, Output, Time, Profile> HasSetpoint<ProfileState<Vel, Time>> for ProfiledPID<Vel, Output, Time, Profile>
-// where
-//   Vel: Div<Time> + Mul<Time> + Copy,
-//   Output: Div<Vel> + Div<Displacement<Vel, Time>> + Div<<Displacement<Vel, Time> as Mul<Time>>::Output> + Div<Acceleration<Vel, Time>> + Copy,
-//   Displacement<Vel, Time>: Mul<Time> + Div<Time, Output = Vel> + Copy,
-//   <Displacement<Vel, Time> as Mul<Time>>::Output: Copy,
-//   Acceleration<Vel, Time>: Copy,
-//   Profile: StatefulTransform<ProfileState<Vel, Time>, Time, Output = ProfileState<Vel, Time>> + HasSetpoint<ProfileState<Vel, Time>>
-// {
-//   fn set_setpoint(&mut self, sp: ProfileState<Vel, Time>) {
-//     self.profile.set_setpoint(sp);
-//   }
-// }
-
-// impl<Vel, Output, Time, Profile> StatefulTransform<ProfileState<Vel, Time>, Time> for ProfiledPID<Vel, Output, Time, Profile>
-// where
-//   Vel: Div<Time> + Mul<Time> + Copy,
-//   Time: MaybeUnitNumber + Copy,
-//   Output: MaybeUnitNumber + Div<Vel> + Div<Displacement<Vel, Time>> + Div<<Displacement<Vel, Time> as Mul<Time>>::Output> + Div<Acceleration<Vel, Time>> + Copy,
-//   Displacement<Vel, Time>: MaybeUnitNumber + Mul<Time> + Div<Time, Output = Vel> + Mul<Kp<Displacement<Vel, Time>, Output>, Output = Output> + Copy,
-//   <Displacement<Vel, Time> as Mul<Time>>::Output: Copy,
-//   Acceleration<Vel, Time>: Copy,
-//   Profile: StatefulTransform<ProfileState<Vel, Time>, Time, Output = ProfileState<Vel, Time>>,
-//   KV<Output, Vel>: Mul<Vel, Output=Output> + Copy,
-//   KA<Output, Vel, Time>: Mul<Acceleration<Vel, Time>, Output=Output> + Copy,
-//   Integral<Displacement<Vel, Time>, Time>: Copy + Zero + Mul<Ki<Displacement<Vel, Time>, Output, Time>, Output = Output>,
-//   Derivative<Displacement<Vel, Time>, Time>: Copy + Zero + Mul<Kd<Displacement<Vel, Time>, Output, Time>, Output = Output>,
-//   Kp<Displacement<Vel, Time>, Output>: Zero + Copy,
-//   Ki<Displacement<Vel, Time>, Output, Time>: Zero + Copy,
-//   Kd<Displacement<Vel, Time>, Output, Time>: Zero + Copy,
-// {
-//   type Output = Output;
-
-//   fn calculate(&mut self, input: ProfileState<Vel, Time>, time: Time) -> Self::Output {
-//     let new_state = self.profile.calculate(input, time);
-//     self.pid.set_setpoint(new_state.displacement);
-//     let ff = self.ff.calculate(input);
-//     self.pid.calculate(input.displacement, time) + ff
-//   }
-
-//   fn reset(&mut self) {
-//     self.pid.reset();
-//   }
-// }
