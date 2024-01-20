@@ -1,7 +1,7 @@
 use std::{sync::{RwLock, Arc}, time::Duration};
 
 use num_traits::Zero;
-use robot_rs_units::{Length, electrical::Voltage, Time, Angle, Mass, QuantityBase, millisecond, motion::{meters_per_second2, meters_per_second}, traits::{Angle as _, MaybeUnitNumber}};
+use robot_rs_units::{Length, electrical::Voltage, Time, Angle, Mass, QuantityBase, millisecond, motion::{meters_per_second2, meters_per_second}, traits::Angle as _};
 
 use crate::{actuators::VoltageActuator, physics::motor::SpooledMotorForwardDynamics, sensors::{StatefulBinarySensor, StatefulDisplacementSensor}, transforms::{StatefulTransform, HasSetpoint}, time::now};
 
@@ -113,21 +113,17 @@ impl ElevatorImpl {
       self.limit_switches.1.as_mut().map(|x| x.get_sensor_value()).unwrap_or(false),
     );
 
-    let mut state = self.frontend.state.read().unwrap().clone();
     let current_demand = self.frontend.demand.read().unwrap().clone();
 
-    let mut demand_voltage = match current_demand {
+    let (mut demand_voltage, mut state) = match current_demand {
       (ElevatorDemand::Disabled, _) => {
-        state = ElevatorState::Disabled;
-        Zero::zero()
+        (Zero::zero(), ElevatorState::Disabled)
       },
       (ElevatorDemand::Idle, _) => {
-        state = ElevatorState::Idle { height: current_height };
-        Zero::zero()
+        (Zero::zero(), ElevatorState::Idle { height: current_height })
       },
       (ElevatorDemand::Manual { voltage }, _) => {
-        state = ElevatorState::Manual { voltage };
-        voltage
+        (voltage, ElevatorState::Manual { voltage })
       },
       (ElevatorDemand::Height { height: target }, is_new_demand) => {
         self.controller.set_setpoint(target);
@@ -137,13 +133,14 @@ impl ElevatorImpl {
           self.frontend.demand.write().unwrap().1 = false;
         }
         
-        if self.stability_filter.calculate(target - current_height, measurement_time) {
-          state = ElevatorState::Stable { height: current_height, demand: target }
+        let state = if self.stability_filter.calculate(target - current_height, measurement_time) {
+          ElevatorState::Stable { height: current_height, demand: target }
         } else {
-          state = ElevatorState::Moving { height: current_height, demand: target }
-        }
+          ElevatorState::Moving { height: current_height, demand: target }
+        };
 
-        self.controller.calculate(current_height, measurement_time)
+        let control_output = self.controller.calculate(current_height, measurement_time);
+        (control_output, state)
       }
     };
 

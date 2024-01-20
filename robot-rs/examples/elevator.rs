@@ -4,7 +4,7 @@ use futures::FutureExt;
 use ntcore_rs::NetworkTableInstance;
 use num_traits::Zero;
 use robot_rs::{systems::elevator::{ElevatorImpl, ElevatorParams, sim::ElevatorSim, AwaitableElevator}, actuators::{sim::SimulatedActuator, ActuatorExt}, sensors::{sim::SimulatedSensor, SensorExt, StatefulSensorExt, StatefulSensor}, physics::motor::{from_dyno::KrakenTrap, MotorExtensionTrait, SpooledMotorInverseDynamics}, transforms::{pid::PID, stability::RMSStabilityFilter, diff::DifferentiatingTransform, linear::LinearTransforms, profile::{Profiled1stOrderController, TrapezoidalProfile, ProfileState, ProfileFeedForward}, TransformExt, ChainedStatefulTransformsA}, start::{RobotResult, RobotState}, robot_main, system, perform, activity::Priority};
-use robot_rs_units::{kilogram, degree, meter, electrical::{volt, Voltage}, Length, inch, motion::{meters_per_second, meters_per_second2}, second, millisecond, Time, force::{newton_meter, newton}};
+use robot_rs_units::{kilogram, degree, meter, electrical::{volt, Voltage}, Length, inch, motion::{meters_per_second, meters_per_second2}, millisecond, Time};
 
 async fn my_robot(_state: RobotState) -> RobotResult {
   let nt = NetworkTableInstance::default();

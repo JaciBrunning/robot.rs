@@ -1,6 +1,6 @@
 use std::ops::{Add, Sub, Mul, Div, Neg};
 
-use num_traits::{Zero, Float};
+use num_traits::Zero;
 
 use crate::{Dimension, Quantity, QuantityBase};
 

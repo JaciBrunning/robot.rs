@@ -1,11 +1,11 @@
-use std::{ops::{Div, Mul, Neg, Add}, marker::PhantomData, fmt::Display};
+use std::{ops::{Div, Mul, Neg, Add}, marker::PhantomData};
 
 use num_traits::Zero;
-use robot_rs_units::{traits::{MaybeUnitNumber, ToFloat, FromFloat}, motion::{Velocity, AngularVelocity}, Time, electrical::{volt, Voltage}, Mass, force::MOI};
+use robot_rs_units::{traits::{MaybeUnitNumber, ToFloat, FromFloat}, motion::{Velocity, AngularVelocity}, Time, electrical::Voltage, Mass, force::MOI};
 
 use crate::physics::motor::{SpooledMotorInverseDynamics, MotorInverseDynamics};
 
-use super::{StatefulTransform, HasSetpoint, Transform, pid::{PID, Ki, Kd, Derivative, Integral, Kp}};
+use super::{StatefulTransform, HasSetpoint, Transform};
 
 pub type Displacement<Vel, Time> = <Vel as Mul<Time>>::Output;
 pub type Acceleration<Vel, Time> = <Vel as Div<Time>>::Output;
@@ -248,7 +248,8 @@ where
   }
 }
 
-impl<Vel, Output, Time, Profile, Controller, Feedforward> HasSetpoint<Displacement<Vel, Time>> for Profiled1stOrderController<Vel, Output, Time, Profile, Controller, Feedforward>
+impl<Vel, Output, Time, Profile, Controller, Feedforward> HasSetpoint<Displacement<Vel, Time>>
+for Profiled1stOrderController<Vel, Output, Time, Profile, Controller, Feedforward>
 where
   Profile: StatefulTransform<ProfileState<Vel, Time>, Time, Output = ProfileState<Vel, Time>> + HasSetpoint<ProfileState<Vel, Time>>,
   Controller: StatefulTransform<Displacement<Vel, Time>, Time, Output = Output>,
@@ -265,7 +266,8 @@ where
   }
 }
 
-impl<Vel, Output, Time, Profile, Controller, Feedforward> StatefulTransform<Displacement<Vel, Time>, Time> for Profiled1stOrderController<Vel, Output, Time, Profile, Controller, Feedforward>
+impl<Vel, Output, Time, Profile, Controller, Feedforward> StatefulTransform<Displacement<Vel, Time>, Time>
+for Profiled1stOrderController<Vel, Output, Time, Profile, Controller, Feedforward>
 where
   Profile: StatefulTransform<ProfileState<Vel, Time>, Time, Output = ProfileState<Vel, Time>> + HasSetpoint<ProfileState<Vel, Time>>,
   Controller: StatefulTransform<Displacement<Vel, Time>, Time, Output = Output> + HasSetpoint<Displacement<Vel, Time>>,
