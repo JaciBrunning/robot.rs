@@ -1,4 +1,4 @@
-use std::{ops::{Div, Mul, Sub}, collections::VecDeque};
+use std::ops::{Div, Mul, Sub};
 
 use ntcore_rs::{Entry, Publisher, Topic, GenericPublisher, GenericSubscriber};
 use num_traits::Zero;
@@ -43,8 +43,7 @@ where
   ki: Ki<PV, Output, Time>,
   kd: Kd<PV, Output, Time>,
   setpoint: PV,
-  history: VecDeque<PIDMeasurement<PV, Output, Time>>,
-  history_len: usize,
+  last: Option<PIDMeasurement<PV, Output, Time>>
 }
 
 impl<
@@ -55,21 +54,16 @@ impl<
 where
   Integral<PV, Time>: Copy
 {
-  pub fn new(kp: Kp<PV, Output>, ki: Ki<PV, Output, Time>, kd: Kd<PV, Output, Time>, setpoint: PV, history_len: usize) -> Self {
-    if history_len == 0 {
-      panic!("History must be greater than 0");
-    }
-
+  pub fn new(kp: Kp<PV, Output>, ki: Ki<PV, Output, Time>, kd: Kd<PV, Output, Time>, setpoint: PV) -> Self {
     Self {
       kp, ki, kd,
       setpoint,
-      history: VecDeque::with_capacity(history_len),
-      history_len,
+      last: None
     }
   }
 
   pub fn last(&self) -> Option<PIDMeasurement<PV, Output, Time>> {
-    self.history.back().cloned()
+    self.last.clone()
   }
 
   pub fn tunable(self, topic: Topic) -> TunablePID<PV, Output, Time> {
@@ -142,17 +136,13 @@ where
       },
     };
 
-    while self.history.len() >= self.history_len {
-      self.history.pop_front();
-    }
-
     let output = measurement.output;
-    self.history.push_back(measurement);
+    self.last = Some(measurement);
     output
   }
 
   fn reset(&mut self) {
-    self.history.clear();
+    self.last = None;
   }
 }
 

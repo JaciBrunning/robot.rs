@@ -1,11 +1,11 @@
 use std::{sync::{RwLock, Arc}, time::Duration};
 
 use num_traits::Zero;
-use robot_rs_units::{Length, electrical::Voltage, Time, Angle, Mass, QuantityBase, millisecond, motion::{meters_per_second2, meters_per_second}, traits::Angle as _};
+use robot_rs_units::{Length, electrical::{Voltage, volt}, Time, Angle, Mass, QuantityBase, millisecond, motion::{meters_per_second2, meters_per_second}, traits::Angle as _, meter};
 
 use crate::{actuators::VoltageActuator, physics::motor::SpooledMotorForwardDynamics, sensors::{StatefulBinarySensor, StatefulDisplacementSensor}, transforms::{StatefulTransform, HasSetpoint}, time::now};
 
-pub trait Elevator {
+pub trait GenericElevator {
   fn go_idle(&mut self);
   fn go_disabled(&mut self);
   fn go_to_height(&mut self, height: Length);
@@ -14,7 +14,7 @@ pub trait Elevator {
 }
 
 #[async_trait::async_trait]
-pub trait AwaitableElevator : Elevator {
+pub trait AwaitableElevator : GenericElevator {
   async fn go_to_height_wait(&mut self, height: Length);
   async fn wait_for_stable(&self);
 }
@@ -28,23 +28,20 @@ pub enum ElevatorDemand {
 }
 
 #[derive(Debug, Clone)]
-pub enum ElevatorState {
+pub enum ElevatorStateMode {
   Disabled,
-  Idle {
-    height: Length
-  },
-  Manual {
-    voltage: Voltage
-  },
+  Idle,
+  Manual,
   Limited,
-  Stable {
-    height: Length,
-    demand: Length,
-  },
-  Moving {
-    height: Length,
-    demand: Length,
-  },
+  Stable,
+  Moving
+}
+
+#[derive(Debug, Clone)]
+pub struct ElevatorState {
+  pub height: Length,
+  pub applied_voltage: Voltage,
+  pub mode: ElevatorStateMode
 }
 
 #[derive(Clone, Debug)]
@@ -63,7 +60,7 @@ pub struct ElevatorParams {
 pub trait Controller : StatefulTransform<Length, Time, Output=Voltage> + HasSetpoint<Length> {}
 impl<T: StatefulTransform<Length, Time, Output=Voltage> + HasSetpoint<Length>> Controller for T {}
 
-pub struct ElevatorImpl {
+pub struct Elevator {
   params: ElevatorParams,
 
   actuator: Box<dyn VoltageActuator + Send + Sync>,
@@ -77,7 +74,7 @@ pub struct ElevatorImpl {
   frontend: ElevatorFrontend
 }
 
-impl ElevatorImpl {
+impl Elevator {
   pub fn new(
     params: ElevatorParams,
     actuator: Box<dyn VoltageActuator + Send + Sync>,
@@ -94,7 +91,7 @@ impl ElevatorImpl {
       controller, stability_filter,
       frontend: ElevatorFrontend {
         demand: Arc::new(RwLock::new((ElevatorDemand::Disabled, true))),
-        state: Arc::new(RwLock::new(ElevatorState::Disabled))
+        state: Arc::new(RwLock::new(ElevatorState { height: 0.0 * meter, applied_voltage: 0.0 * volt, mode: ElevatorStateMode::Disabled }))
       }
     }
   }
@@ -105,7 +102,6 @@ impl ElevatorImpl {
 
   pub fn tick(&mut self, time: Time) {
     let current_height = self.height_sensor.get_displacement();
-    let measurement_time = self.height_sensor.get_last_measurement_time();
     let feedforward = self.motor_model.voltage(-9.81 * self.params.angle_from_horizon.sin() * meters_per_second2 * self.params.carriage_mass, 0.0 * meters_per_second);
 
     let limits_hit = (
@@ -115,16 +111,10 @@ impl ElevatorImpl {
 
     let current_demand = self.frontend.demand.read().unwrap().clone();
 
-    let (mut demand_voltage, mut state) = match current_demand {
-      (ElevatorDemand::Disabled, _) => {
-        (Zero::zero(), ElevatorState::Disabled)
-      },
-      (ElevatorDemand::Idle, _) => {
-        (Zero::zero(), ElevatorState::Idle { height: current_height })
-      },
-      (ElevatorDemand::Manual { voltage }, _) => {
-        (voltage, ElevatorState::Manual { voltage })
-      },
+    let (mut demand_voltage, mut state_mode) = match current_demand {
+      (ElevatorDemand::Disabled, _) => (Zero::zero(), ElevatorStateMode::Disabled),
+      (ElevatorDemand::Idle, _) => (Zero::zero(), ElevatorStateMode::Idle),
+      (ElevatorDemand::Manual { voltage }, _) => (voltage, ElevatorStateMode::Manual),
       (ElevatorDemand::Height { height: target }, is_new_demand) => {
         self.controller.set_setpoint(target);
         if is_new_demand {
@@ -133,13 +123,13 @@ impl ElevatorImpl {
           self.frontend.demand.write().unwrap().1 = false;
         }
         
-        let state = if self.stability_filter.calculate(target - current_height, measurement_time) {
-          ElevatorState::Stable { height: current_height, demand: target }
+        let state = if self.stability_filter.calculate(target - current_height, time) {
+          ElevatorStateMode::Stable
         } else {
-          ElevatorState::Moving { height: current_height, demand: target }
+          ElevatorStateMode::Moving
         };
 
-        let control_output = self.controller.calculate(current_height, measurement_time);
+        let control_output = self.controller.calculate(current_height, time);
         (control_output, state)
       }
     };
@@ -147,17 +137,21 @@ impl ElevatorImpl {
     match (limits_hit, demand_voltage) {
       ((true, false), voltage) if voltage < Zero::zero() => {
         demand_voltage = Zero::zero();
-        state = ElevatorState::Limited;
+        state_mode = ElevatorStateMode::Limited;
       },
       ((false, true), voltage) if voltage > feedforward => {
         demand_voltage = feedforward;
-        state = ElevatorState::Limited;
+        state_mode = ElevatorStateMode::Limited;
       },
       _ => ()
     }
 
     self.actuator.set_actuator_value(demand_voltage, time);
-    *self.frontend.state.write().unwrap() = state;
+    *self.frontend.state.write().unwrap() = ElevatorState {
+      height: current_height,
+      applied_voltage: demand_voltage,
+      mode: state_mode,
+    };
   }
 
   pub async fn run_async(mut self, period: Time) {
@@ -168,7 +162,7 @@ impl ElevatorImpl {
   }
 }
 
-impl Elevator for ElevatorImpl {
+impl GenericElevator for Elevator {
   fn go_idle(&mut self) {
     *self.frontend.demand.write().unwrap() = (ElevatorDemand::Idle, true);
     self.tick(now());
@@ -185,11 +179,11 @@ impl Elevator for ElevatorImpl {
   }
 
   fn is_stable(&self) -> bool {
-    matches!(*self.frontend.state.read().unwrap(), ElevatorState::Stable { .. })
+    matches!(self.frontend.state.read().unwrap().mode, ElevatorStateMode::Stable)
   }
 }
 
-impl Elevator for ElevatorFrontend {
+impl GenericElevator for ElevatorFrontend {
   fn go_idle(&mut self) {
     *self.demand.write().unwrap() = (ElevatorDemand::Idle, true);
   }
@@ -203,7 +197,7 @@ impl Elevator for ElevatorFrontend {
   }
 
   fn is_stable(&self) -> bool {
-    matches!(*self.state.read().unwrap(), ElevatorState::Stable { .. })
+    matches!(self.state.read().unwrap().mode, ElevatorStateMode::Stable)
   }
 }
 
@@ -226,10 +220,11 @@ impl AwaitableElevator for ElevatorFrontend {
 pub mod sim {
   use std::time::Duration;
 
-  use num_traits::Zero;
-  use robot_rs_units::{Length, Time, electrical::Voltage, millisecond, motion::{meters_per_second2, Velocity}, traits::Angle as _, QuantityBase};
+  use ntcore_rs::GenericPublisher;
+use num_traits::Zero;
+  use robot_rs_units::{Length, Time, electrical::{Voltage, volt}, millisecond, motion::{meters_per_second2, Velocity, meters_per_second}, traits::{Angle as _, MaybeUnitNumber}, QuantityBase, force::newton, ampere, meter};
 
-  use crate::{actuators::sim::SimActuator, physics::motor::SpooledMotorInverseDynamics, sensors::sim::SimSensor, time::now};
+  use crate::{actuators::sim::SimActuator, physics::motor::SpooledMotorDynamics, sensors::sim::SimSensor, time::now};
 
   use super::ElevatorParams;
 
@@ -237,21 +232,28 @@ pub mod sim {
     params: ElevatorParams,
     
     actuator: Box<dyn SimActuator<Voltage, Time> + Send + Sync>,
-    motor_model: Box<dyn SpooledMotorInverseDynamics + Send + Sync>,
+    motor_model: Box<dyn SpooledMotorDynamics + Send + Sync>,
     height_sensor: Box<dyn SimSensor<Length> + Send + Sync>,
     limit_switches: (Option<Box<dyn SimSensor<bool> + Send + Sync>>, Option<Box<dyn SimSensor<bool> + Send + Sync>>),
 
     last_tick: Option<Time>,
     speed: Velocity,
+
+    pub_demand: ntcore_rs::Publisher<f64>,
+    pub_force: ntcore_rs::Publisher<f64>,
+    pub_current: ntcore_rs::Publisher<f64>,
+    pub_velocity: ntcore_rs::Publisher<f64>,
+    pub_height: ntcore_rs::Publisher<f64>,
   }
 
   impl ElevatorSim {
     pub fn new(
       params: ElevatorParams,
       actuator: Box<dyn SimActuator<Voltage, Time> + Send + Sync>,
-      motor_model: Box<dyn SpooledMotorInverseDynamics + Send + Sync>,
+      motor_model: Box<dyn SpooledMotorDynamics + Send + Sync>,
       height_sensor: Box<dyn SimSensor<Length> + Send + Sync>,
-      limit_switches: (Option<Box<dyn SimSensor<bool> + Send + Sync>>, Option<Box<dyn SimSensor<bool> + Send + Sync>>)
+      limit_switches: (Option<Box<dyn SimSensor<bool> + Send + Sync>>, Option<Box<dyn SimSensor<bool> + Send + Sync>>),
+      topic: ntcore_rs::Topic,
     ) -> Self {
       Self {
         params,
@@ -260,7 +262,12 @@ pub mod sim {
         height_sensor,
         limit_switches,
         last_tick: None,
-        speed: Zero::zero()
+        speed: Zero::zero(),
+        pub_demand: topic.child("demand").publish(),
+        pub_force: topic.child("force").publish(),
+        pub_current: topic.child("current").publish(),
+        pub_velocity: topic.child("velocity").publish(),
+        pub_height: topic.child("height").publish(),
       }
     }
     
@@ -270,9 +277,13 @@ pub mod sim {
         let (demand_volts, _demand_time) = self.actuator.get_actuator_value();
 
         let force = self.motor_model.force(demand_volts, self.speed);
-        let accel = force / self.params.carriage_mass - 9.81 * self.params.angle_from_horizon.sin() * meters_per_second2;
-        self.speed += accel * dt;
+        let current_draw = self.motor_model.current(force);
 
+        let net_force = force - 9.81 * meters_per_second2 * self.params.carriage_mass * self.params.angle_from_horizon.sin();
+        let accel = net_force / self.params.carriage_mass;
+        let max_speed = self.motor_model.velocity(demand_volts, 0.0 * newton);
+        self.speed += accel * dt;
+        self.speed = self.speed.max(-max_speed).min(max_speed);
 
         let current_displacement = self.height_sensor.get_sensor_value();
         let mut new_displacement = current_displacement + self.speed * dt;
@@ -292,6 +303,12 @@ pub mod sim {
 
         if let Some(sw) = self.limit_switches.0.as_mut() { sw.set_sensor_value(limit_triggered.0, time) }
         if let Some(sw) = self.limit_switches.1.as_mut() { sw.set_sensor_value(limit_triggered.1, time) }
+        
+        self.pub_demand.set(demand_volts.to::<volt>()).ok();
+        self.pub_force.set(force.to::<newton>()).ok();
+        self.pub_current.set(current_draw.to::<ampere>()).ok();
+        self.pub_velocity.set(self.speed.to::<meters_per_second>()).ok();
+        self.pub_height.set(new_displacement.to::<meter>()).ok();
 
         self.height_sensor.set_sensor_value(new_displacement, time);
       }

@@ -48,6 +48,9 @@ pub trait MotorCurrentDynamics {
   fn torque_from_current(&self, current: Current) -> Torque;
 }
 
+pub trait MotorDynamics : MotorForwardDynamics + MotorInverseDynamics + MotorCurrentDynamics {}
+impl<T: MotorForwardDynamics + MotorInverseDynamics + MotorCurrentDynamics> MotorDynamics for T {}
+
 pub trait SpooledMotorForwardDynamics {
   fn voltage(&self, force: Force, velocity: Velocity) -> Voltage;
 }
@@ -69,6 +72,9 @@ pub trait SpooledMotorCurrentDynamics {
   fn current(&self, force: Force) -> Current;
   fn force_from_current(&self, current: Current) -> Force;
 }
+
+pub trait SpooledMotorDynamics : SpooledMotorForwardDynamics + SpooledMotorInverseDynamics + SpooledMotorCurrentDynamics {}
+impl<T: SpooledMotorForwardDynamics + SpooledMotorInverseDynamics + SpooledMotorCurrentDynamics> SpooledMotorDynamics for T {}
 
 #[derive(Clone, Debug)]
 pub struct Motor {
