@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub};
+use std::ops::{Add, Sub, Mul, Div};
 
 use num_traits::{Zero, Float};
 
@@ -50,7 +50,7 @@ pub fn tan<A: Angle>(angle: A) -> f64 {
   angle.tan()
 }
 
-pub trait MaybeUnitNumber : Zero + Add<Self, Output = Self> + Sub<Self, Output = Self> {
+pub trait MaybeUnitNumber : Zero + Add<Self, Output = Self> + Sub<Self, Output = Self> + Mul<f64, Output = Self> + Div<f64, Output = Self> + PartialOrd<Self> {
   fn one() -> Self;
   fn abs(self) -> Self;
   fn signum(self) -> Self;
@@ -107,45 +107,45 @@ impl<D: Dimension + ?Sized> MaybeUnitNumber for Quantity<D> {
   }
 }
 
-impl<T: Float> MaybeUnitNumber for T {
+impl MaybeUnitNumber for f64 {
   fn one() -> Self {
-    T::one()
+    1.0
   }
 
   fn abs(self) -> Self {
-    T::abs(self)
+    f64::abs(self)
   }
 
   fn signum(self) -> Self {
-    T::signum(self)
+    f64::signum(self)
   }
 
   fn is_positive(self) -> bool {
-    T::is_sign_positive(self)
+    f64::is_sign_positive(self)
   }
 
   fn is_negative(self) -> bool {
-    T::is_sign_negative(self)
+    f64::is_sign_negative(self)
   }
 
   fn floor(self) -> Self {
-    T::floor(self)
+    f64::floor(self)
   }
 
   fn ceil(self) -> Self {
-    T::ceil(self)
+    f64::ceil(self)
   }
 
   fn round(self) -> Self {
-    T::round(self)
+    f64::round(self)
   }
 
   fn max(self, other: Self) -> Self {
-    T::max(self, other)
+    f64::max(self, other)
   }
 
   fn min(self, other: Self) -> Self {
-    T::min(self, other)
+    f64::min(self, other)
   }
 }
 

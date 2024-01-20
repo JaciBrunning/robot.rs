@@ -1,11 +1,16 @@
 use std::{marker::PhantomData, ops::Neg};
 
+use self::{map::{MapTransform, MapStatefulTransform}, cascade::CascadeTransform};
+
 pub mod binary;
+pub mod cascade;
 pub mod diff;
 pub mod offset;
 pub mod linear;
+pub mod map;
 pub mod pid;
 pub mod predictive;
+pub mod profile;
 pub mod stability;
 pub mod transform;
 
@@ -219,6 +224,7 @@ where
 pub trait TransformExt<I> : Transform<I> + Sized {
   fn to_stateful(self) -> StatefulTransformAdapter<Self, I>;
   fn then<Other: Transform<Self::Output>>(self, other: Other) -> ChainedTransforms<Self, Other>;
+  fn map<F: Fn(Self::Output) -> O, O>(self, map: F) -> ChainedTransforms<Self, MapTransform<F, Self::Output, O>>;
 }
 
 impl<T: Transform<I>, I> TransformExt<I> for T {
@@ -228,5 +234,24 @@ impl<T: Transform<I>, I> TransformExt<I> for T {
 
   fn then<Other: Transform<Self::Output>>(self, other: Other) -> ChainedTransforms<Self, Other> {
     ChainedTransforms::new(self, other)
+  }
+
+  fn map<F: Fn(Self::Output) -> O, O>(self, map: F) -> ChainedTransforms<Self, MapTransform<F, Self::Output, O>> {
+    ChainedTransforms::new(self, MapTransform::new(map))
+  }
+}
+
+pub trait StatefulTransformExt<I, Time> : StatefulTransform<I, Time> + Sized {
+  fn cascade<J, Other: HasSetpoint<Self::Output> + StatefulTransform<J, Time>>(self, other: Other) -> CascadeTransform<Self, Other, Time>;
+  fn map<F: FnMut(Self::Output, Time) -> O, O>(self, map: F) -> ChainedStatefulTransformsA<Self, MapStatefulTransform<F, Self::Output, O, Time>, Time>;
+}
+
+impl<T: StatefulTransformExt<I, Time>, I, Time> StatefulTransformExt<I, Time> for T {
+  fn cascade<J, Other: HasSetpoint<Self::Output> + StatefulTransform<J, Time>>(self, other: Other) -> CascadeTransform<Self, Other, Time> {
+    CascadeTransform::new(self, other)
+  }
+
+  fn map<F: FnMut(Self::Output, Time) -> O, O>(self, map: F) -> ChainedStatefulTransformsA<Self, MapStatefulTransform<F, Self::Output, O, Time>, Time> {
+    ChainedStatefulTransformsA::new(self, MapStatefulTransform::new(map))
   }
 }
