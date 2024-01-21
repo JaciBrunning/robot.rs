@@ -11,13 +11,21 @@ include = [
     "Cargo.toml",
     "build.rs",
     "WPILIB_LICENSE",
-    "HALWrapper.h",
-    "vendor/**/*",]
+    "HALWrapper.h",]
 
 [package.metadata.robot_rs]
-vendor_dir = ["vendor/"]
+mavens = { artifactory = "https://frcmaven.wpi.edu/artifactory/release" }
+artifacts = [
+    { maven = "artifactory", artifact = "edu.wpi.first.hal:hal-cpp:2024.2.1" },
+    { maven = "artifactory", artifact = "edu.wpi.first.wpiutil:wpiutil-cpp:2024.2.1" },
+    { maven = "artifactory", artifact = "edu.wpi.first.ni-libraries:chipobject:2024.2.1", only = ["linuxathena"], link_only = true },
+    { maven = "artifactory", artifact = "edu.wpi.first.ni-libraries:netcomm:2024.2.1", only = ["linuxathena"], link_only = true },
+    { maven = "artifactory", artifact = "edu.wpi.first.ni-libraries:runtime:2024.2.1", only = ["linuxathena"], no_headers = true, link_only = true },
+    { maven = "artifactory", artifact = "edu.wpi.first.ni-libraries:visa:2024.2.1", only = ["linuxathena"], link_only = true },
+]
 
 [dependencies]
 
 [build-dependencies]
 bindgen = "0.69.1"
+robot-rs-build-utils = { path = "../robot-rs-build-utils" }

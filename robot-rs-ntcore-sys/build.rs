@@ -4,31 +4,27 @@ const SYMBOL_REGEX: &str = r"(NT_)\w+";
 
 use std::{env, path::PathBuf};
 
+use robot_rs_build_utils::{maybe_download_libs, Profile, link_against};
+
 fn main() {
   let target = env::var("TARGET").unwrap();
+  let profile_str = std::env::var("PROFILE").unwrap();
+  let profile = match profile_str.as_str() {
+    "debug" => Profile::Debug,
+    _ => Profile::Release
+  };
 
-  // Import bindings from WPI libraries
-  println!("cargo:rustc-link-search={}", PathBuf::from(format!("vendor/{}/libs", target)).canonicalize().unwrap().to_str().unwrap());
-  let profile = std::env::var("PROFILE").unwrap();
-  match profile.as_str() {
-      "debug" => {
-        println!("cargo:rustc-link-lib=ntcored");
-        println!("cargo:rustc-link-lib=wpiutild");
-        println!("cargo:rustc-link-lib=wpinetd");
-      },
-      _ => {
-        println!("cargo:rustc-link-lib=ntcore");
-        println!("cargo:rustc-link-lib=wpiutil");
-        println!("cargo:rustc-link-lib=wpinet");
-      },
-  }
+  let (header_path, linktime_dirs, runtime_dirs) = maybe_download_libs(target.as_str(), profile).unwrap();
+  link_against(target.as_str(), linktime_dirs).unwrap();
+
   println!("cargo:rerun-if-changed=HALWrapper.h");
+  println!("cargo:rerun-if-changed=Cargo.toml");
 
   // Some config copied from first-rust-competition https://github.com/first-rust-competition/first-rust-competition/blob/master/hal-gen/src/main.rs
   let bindings = bindgen::Builder::default()
     .header("HALWrapper.h")
     .derive_default(true)
-    .clang_arg(format!("-Ivendor/{}/headers", target))
+    .clang_arg(format!("-I{}", header_path.to_str().unwrap()))
     .allowlist_type(SYMBOL_REGEX)
     .allowlist_function(SYMBOL_REGEX)
     .allowlist_var(SYMBOL_REGEX)

@@ -11,13 +11,18 @@ include = [
     "Cargo.toml",
     "build.rs",
     "WPILIB_LICENSE",
-    "HALWrapper.h",
-    "vendor/**/*",]
+    "HALWrapper.h",]
 
 [package.metadata.robot_rs]
-vendor_dir = ["vendor/"]
+mavens = { artifactory = "https://frcmaven.wpi.edu/artifactory/release" }
+artifacts = [
+    { maven = "artifactory", artifact = "edu.wpi.first.ntcore:ntcore-cpp:2024.2.1" },
+    { maven = "artifactory", artifact = "edu.wpi.first.wpiutil:wpiutil-cpp:2024.2.1" },
+    { maven = "artifactory", artifact = "edu.wpi.first.wpinet:wpinet-cpp:2024.2.1" },
+]
 
 [dependencies]
 
 [build-dependencies]
 bindgen = "0.69.1"
+robot-rs-build-utils = { path = "../robot-rs-build-utils" }
