@@ -1,6 +1,7 @@
-use std::{path::{PathBuf, Path}, fs, error::Error, io::Read};
+use std::{path::{PathBuf, Path}, error::Error, io::{Read, Write}};
 
-use cargo_metadata::{MetadataCommand, Metadata};
+use cargo_metadata::{Metadata, MetadataCommand, Package};
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Profile {
@@ -44,14 +45,10 @@ pub fn get_meta() -> Result<Metadata, Box<dyn Error>> {
   Ok(meta)
 }
 
-pub fn maybe_download_libs(target: &str, profile: Profile) -> Result<(PathBuf, Vec<PathBuf>, Vec<PathBuf>), Box<dyn Error>> {
-  let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR")?);
-  let header_path = out_dir.join("headers");
-  let lib_path = out_dir.join("libs");
+pub fn maybe_download_libs(package: &Package, target: &str, profile: Profile) -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>), Box<dyn Error>> {
+  let robot_rs_dir = home::home_dir().ok_or(anyhow::anyhow!("Can't get your home directory :("))?.join(".robotrs");
 
-  let download_folder = format!("{}/{}", home::home_dir().ok_or(anyhow::anyhow!("Can't get your home directory :("))?.as_os_str().to_string_lossy(), ".robotrs/mavenlibs");
-  let meta = get_meta()?;
-  let this_package = meta.root_package().unwrap();
+  let download_folder = robot_rs_dir.join("mavenlibs");
 
   let [target_platform, architecture] = target_triple_to_wpi(target)?;
   let classifier_platform = [target_platform, architecture].join("");
@@ -60,10 +57,11 @@ pub fn maybe_download_libs(target: &str, profile: Profile) -> Result<(PathBuf, V
     Profile::Release => "",
   };
 
+  let mut header_dirs = vec![];
   let mut runtime = vec![];
   let mut linktime = vec![];
 
-  if let Some(robot_rs_key) = this_package.metadata.as_object().and_then(|m| m.get("robot_rs")) {
+  if let Some(robot_rs_key) = package.metadata.as_object().and_then(|m| m.get("robot_rs")) {
     let artifacts = robot_rs_key.get("artifacts").and_then(|x| x.as_array());
     let mavens = robot_rs_key.get("mavens").and_then(|x| x.as_object());
 
@@ -101,12 +99,8 @@ pub fn maybe_download_libs(target: &str, profile: Profile) -> Result<(PathBuf, V
           let artifact_url = format!("{}/{}", maven, fragment);
           let headers_url = format!("{}/{}", maven, header_fragment);
 
-          let this_libpath = lib_path.join(name);
-
-          try_download(&artifact_url, &format!("{}/{}", download_folder, fragment))?;
-          extract_frc_zip_archive(&format!("{}/{}", download_folder, fragment), this_libpath.clone())?;
-
-          let inner_path = this_libpath.join(target_platform).join(architecture).join("shared");
+          let extracted_dir = try_download_and_extract(&artifact_url, &download_folder.join(fragment), &robot_rs_dir)?;
+          let inner_path = extracted_dir.join(target_platform).join(architecture).join("shared");
 
           linktime.push(inner_path.clone());
           if !link_only {
@@ -114,37 +108,73 @@ pub fn maybe_download_libs(target: &str, profile: Profile) -> Result<(PathBuf, V
           }
 
           if !no_headers {
-            try_download(&headers_url, &format!("{}/{}", download_folder, header_fragment))?;
-            extract_frc_zip_archive(&format!("{}/{}", download_folder, header_fragment), header_path.clone())?;
+            let extracted_dir = try_download_and_extract(&headers_url, &download_folder.join(header_fragment), &robot_rs_dir)?;
+            header_dirs.push(extracted_dir)
           }
         }
       },
       _ => ()
     }
   }
-  Ok((header_path, linktime, runtime))
+  Ok((header_dirs, linktime, runtime))
 }
 
-fn try_download(url: &str, target_path: &str) -> Result<(), Box<dyn Error>> {
-  if !Path::new(target_path).exists() {
+fn try_download_and_extract(url: &str, target_path: &Path, robot_rs_dir: &Path) -> Result<PathBuf, Box<dyn Error>> {
+  let hash_file = Path::new(&format!("{}.sha256", target_path.as_os_str().to_string_lossy())).to_owned();
+  if !hash_file.exists() || !Path::new(target_path).exists() {
     println!("cargo:warning=Downloading: {}", url);
     let mut resp = reqwest::blocking::get(url)?;
     std::fs::create_dir_all(PathBuf::from(target_path).parent().unwrap().as_os_str().to_str().unwrap())?;
     let mut f = std::fs::File::create(target_path)?;
     std::io::copy(&mut resp, &mut f)?;
   }
-  Ok(())
+
+  if !hash_file.exists() {
+    let mut hasher = Sha256::new();
+    let mut f = std::fs::File::open(target_path)?;
+    let mut buf = [0u8; 1024];
+    loop {
+      let n = f.read(&mut buf[..])?;
+      if n == 0 {
+        break;
+      }
+
+      hasher.update(&buf[0..n]);
+    }
+    let mut f_hash_out = std::fs::File::create(&hash_file)?;
+    f_hash_out.write_all(format!("{:X}", hasher.finalize()).as_bytes())?;
+  }
+
+  let mut hashbuf = Vec::with_capacity(128);
+  std::fs::File::open(&hash_file)?.read_to_end(&mut hashbuf)?;
+  let hash = String::from_utf8(hashbuf)?;
+
+  let extract_path = robot_rs_dir.join("extracted").join(hash);
+
+  if !extract_path.exists() {
+    match extract(target_path, &extract_path) {
+      Ok(_) => Ok(extract_path),
+      Err(e) => {
+        if extract_path.exists() {
+          std::fs::remove_dir_all(&extract_path)?;
+        }
+        Err(e)
+      }
+    }
+  } else {
+    Ok(extract_path)
+  }
 }
 
-fn extract_frc_zip_archive(zip_path: &str, out_dir: PathBuf) -> Result<(), Box<dyn Error>> {
-  let file = std::fs::File::open(zip_path)?;
+fn extract(target_path: &Path, extract_path: &Path) -> Result<(), Box<dyn Error>> {
+  let file = std::fs::File::open(target_path)?;
   let mut zip = zip::ZipArchive::new(file)?;
 
   for i in 0..zip.len() {
     let mut inner_file = zip.by_index(i)?;
     if inner_file.is_file() {
-      let inner_path = inner_file.enclosed_name().ok_or(anyhow::anyhow!("Dangerous ZIP File - Path Traversal detected: {}", zip_path))?;
-      let joined_path = out_dir.join(inner_path);
+      let inner_path = inner_file.enclosed_name().ok_or(anyhow::anyhow!("Dangerous ZIP File - Path Traversal detected: {}", target_path.as_os_str().to_string_lossy()))?;
+      let joined_path = extract_path.join(inner_path);
       if !joined_path.exists() {
         std::fs::create_dir_all(joined_path.parent().unwrap().as_os_str().to_str().unwrap())?;
         let mut new_f = std::fs::File::create(joined_path.clone())?;
@@ -152,6 +182,7 @@ fn extract_frc_zip_archive(zip_path: &str, out_dir: PathBuf) -> Result<(), Box<d
       }
     }
   }
+
   Ok(())
 }
 
@@ -206,59 +237,6 @@ pub fn link_against(target: &str, linktime_dirs: Vec<PathBuf>) -> Result<(), Box
   }
   Ok(())
 }
-
-// pub enum LibraryType {
-//   Link,
-//   Runtime
-// }
-
-// pub fn identify_libraries(target: &str, lt: LibraryType) -> Result<Vec<PathBuf>, Box<dyn Error>> {
-//   let meta = get_meta()?;
-
-//   let mut library_paths = vec![];
-
-//   for package in meta.packages {
-//     if let Some(meta) = package.metadata.as_object() {
-//       if let Some(robot_rs_meta) = meta.get("robot_rs") {
-//         if let Some(vendor_dir) = robot_rs_meta.get("vendor_dir") {
-//           for dir in vendor_dir.as_array().unwrap() {
-//             let vendor_path = package.manifest_path.parent().unwrap().join(dir.as_str().unwrap());
-//             let libs_dir = vendor_path.join(target).join(match lt {
-//               LibraryType::Link => "libs",
-//               LibraryType::Runtime => "runtime-libs",
-//             });
-
-//             match fs::read_dir(libs_dir) {
-//               Ok(paths) => for p in paths {
-//                 match p {
-//                   Ok(p) => {
-//                     library_paths.push(p.path());
-//                   },
-//                   Err(_) => (),
-//                 }
-//               },
-//               Err(_) => ()    // No libs for this target
-//             }
-//           }
-//         }
-//       }
-//     }
-//   }
-
-//   Ok(library_paths)
-// }
-
-// pub fn copy_deps(libraries: Vec<PathBuf>) -> Result<(), Box<dyn Error>> {
-//   let depdir = get_cargo_target_dir()?.join("deps");
-
-//   eprintln!("{:?}", depdir);
-
-//   for p in libraries {
-//     fs::copy(p.clone(), &depdir.join(p.file_name().unwrap()))?;
-//   }
-
-//   Ok(())
-// }
 
 pub fn define_environment(target: &str) {
   match target {

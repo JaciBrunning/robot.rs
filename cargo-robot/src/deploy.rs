@@ -3,6 +3,7 @@ use std::{process::Stdio, path::PathBuf, net::{SocketAddr, ToSocketAddrs}};
 use cargo_metadata::{MetadataCommand, Metadata, Package};
 use clap::Args;
 use log::info;
+use robot_rs_build_utils::{maybe_download_libs, Profile};
 
 use crate::{CargoRobotResult, Error, ssh::SSHSession};
 
@@ -50,7 +51,7 @@ impl DeployCommand {
     let meta = meta.exec().map_err(|_| Error::new("Failed to get Metadata").with_remediation("Are you in the correct directory? If you're using --project, is it correct?"))?;
 
     Self::cargo_build(&args)?;
-    let libs = Self::collect_libs_for_deploy(&meta);
+    let libs = Self::collect_libs_for_deploy(&meta, if args.release { Profile::Release } else { Profile::Debug })?;
 
     let package = meta.root_package().ok_or(Error::new("You can't run deploy in a workspace!").with_remediation("Either cd into a directory, or use --project"))?;
     let ips = match args.ip {
@@ -161,35 +162,25 @@ impl DeployCommand {
     }
   }
 
-  fn collect_libs_for_deploy(meta: &Metadata) -> Vec<PathBuf> {
+  fn collect_libs_for_deploy(meta: &Metadata, profile: Profile) -> CargoRobotResult<Vec<PathBuf>> {
     let mut library_paths = vec![];
 
     for package in &meta.packages {
       if let Some(meta) = package.metadata.as_object() {
-        if let Some(robot_rs_meta) = meta.get("robot_rs") {
-          if let Some(vendor_dir) = robot_rs_meta.get("vendor_dir") {
-            for dir in vendor_dir.as_array().unwrap() {
-              let vendor_path = package.manifest_path.parent().unwrap().join(dir.as_str().unwrap());
-              let libs_dir = vendor_path.join("arm-unknown-linux-gnueabi").join("runtime-libs");
+        let (_header_dirs, _link_dirs, runtime_dirs) = maybe_download_libs(package, "arm-unknown-linux-gnueabi", profile)
+          .map_err(|e| Error::new("Failed to Download and Extract Dependency Libs").with_remediation("Try running `cargo robot prepare` to download files ahead of time").with_specifics(format!("Error: {}", e)))?;
 
-              match std::fs::read_dir(libs_dir) {
-                Ok(paths) => for p in paths {
-                  match p {
-                    Ok(p) => {
-                      library_paths.push(p.path());
-                    },
-                    Err(_) => (),
-                  }
-                },
-                Err(_) => ()    // No libs for this target
-              }
+        for dir in runtime_dirs {
+          for path in std::fs::read_dir(&dir).map_err(|e| Error::new("Internal error: failed to read runtime path.").with_specifics(format!("{}", e)))? {
+            if let Ok(path) = path {
+              library_paths.push(path.path());
             }
           }
         }
       }
     }
 
-    library_paths
+    Ok(library_paths)
   }
 
   fn cargo_build(args: &DeployArgs) -> CargoRobotResult<()> {

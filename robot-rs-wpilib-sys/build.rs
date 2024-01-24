@@ -4,7 +4,7 @@ const SYMBOL_REGEX: &str = r"(HAL_)\w+";
 
 use std::{env, path::PathBuf};
 
-use robot_rs_build_utils::{Profile, maybe_download_libs, link_against};
+use robot_rs_build_utils::{get_meta, link_against, maybe_download_libs, Profile};
 
 fn main() {
   let target = env::var("TARGET").unwrap();
@@ -14,17 +14,17 @@ fn main() {
     _ => Profile::Release
   };
 
-  let (header_path, linktime_dirs, runtime_dirs) = maybe_download_libs(target.as_str(), profile).unwrap();
+  let (header_dirs, linktime_dirs, _runtime_dirs) = maybe_download_libs(get_meta().unwrap().root_package().unwrap(), target.as_str(), profile).unwrap();
   link_against(target.as_str(), linktime_dirs).unwrap();
 
-  println!("cargo:rerun-if-changed=HALWrapper.h");
-  println!("cargo:rerun-if-changed=Cargo.toml");
+  // Needed to always download libs
+  println!("cargo:rerun-if-changed=NULL");
 
   // Some config copied from first-rust-competition https://github.com/first-rust-competition/first-rust-competition/blob/master/hal-gen/src/main.rs
   let bindings = bindgen::Builder::default()
     .header("HALWrapper.h")
     .derive_default(true)
-    .clang_arg(format!("-I{}", header_path.to_str().unwrap()))
+    .clang_args(header_dirs.iter().map(|x| format!("-I{}", x.as_os_str().to_string_lossy())))
     .allowlist_type(SYMBOL_REGEX)
     .allowlist_function(SYMBOL_REGEX)
     .allowlist_var(SYMBOL_REGEX)
