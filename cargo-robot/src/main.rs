@@ -57,7 +57,9 @@ enum Commands {
 #[derive(Subcommand, Debug)]
 enum RobotCommands {
   /// Deploy the robot program to the RoboRIO
-  Deploy(deploy::DeployArgs)
+  Deploy(deploy::DeployArgs),
+
+  Prepare(deploy::DeployArgs),
 }
 
 fn main() {
@@ -69,8 +71,11 @@ fn main() {
       RobotCommands::Deploy(deploy_args) => {
         info!("Starting Deploy Command");
 
-        DeployCommand::invoke(deploy_args)
+        DeployCommand::invoke(deploy_args, false)
       },
+      RobotCommands::Prepare(deploy_args) => {
+        DeployCommand::invoke(deploy_args, true)
+      }
     },
   };
 

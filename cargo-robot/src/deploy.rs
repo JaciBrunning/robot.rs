@@ -43,7 +43,7 @@ pub struct DeployArgs {
 pub struct DeployCommand;
 
 impl DeployCommand {
-  pub fn invoke(args: DeployArgs) -> CargoRobotResult<()> {
+  pub fn invoke(args: DeployArgs, dry_run: bool) -> CargoRobotResult<()> {
     let mut meta = MetadataCommand::new();
     if let Some(project_dir) = &args.project {
       meta.current_dir(project_dir);
@@ -53,44 +53,48 @@ impl DeployCommand {
     Self::cargo_build(&args)?;
     let libs = Self::collect_libs_for_deploy(&meta, if args.release { Profile::Release } else { Profile::Debug })?;
 
-    let package = meta.root_package().ok_or(Error::new("You can't run deploy in a workspace!").with_remediation("Either cd into a directory, or use --project"))?;
-    let ips = match args.ip {
-      Some(ip) => vec![ip],
-      None => match Self::get_robot_metadata_entry(package, "ip") {
-        Ok(ips) => ips.as_str().unwrap().split(",").map(ToOwned::to_owned).collect(),
-        Err(_) => match args.team {
-          Some(team) => Self::generate_ips_for_team(team),
-          None => match Self::get_robot_metadata_entry(package, "team") {
-            Ok(team) => Self::generate_ips_for_team(team.as_u64().unwrap() as usize),
-            Err(e) => Err(e)?
+    if !dry_run {
+      let package = meta.root_package().ok_or(Error::new("You can't run deploy in a workspace!").with_remediation("Either cd into a directory, or use --project"))?;
+      let ips = match args.ip {
+        Some(ip) => vec![ip],
+        None => match Self::get_robot_metadata_entry(package, "ip") {
+          Ok(ips) => ips.as_str().unwrap().split(",").map(ToOwned::to_owned).collect(),
+          Err(_) => match args.team {
+            Some(team) => Self::generate_ips_for_team(team),
+            None => match Self::get_robot_metadata_entry(package, "team") {
+              Ok(team) => Self::generate_ips_for_team(team.as_u64().unwrap() as usize),
+              Err(e) => Err(e)?
+            }
           }
         }
+      };
+
+      let mut errors = vec![];
+
+      let path_to_artifact = meta.target_directory.join("arm-unknown-linux-gnueabi")
+        .join(if args.release { "release" } else { "debug" })
+        .join(match (args.example, args.bin) {
+          (_, Some(bin)) => bin.clone(),
+          (Some(ex), _) => format!("examples/{}", ex),
+          _ => package.name.clone()
+        });
+
+      info!("Collected {} native libraries for deploy", libs.len());
+      for ip in ips {
+        match Self::do_deploy(&ip, &libs, path_to_artifact.clone().into()) {
+          Ok(_) => return Ok(()),
+          Err(e) => errors.push(e)
+        }
       }
-    };
 
-    let mut errors = vec![];
-
-    let path_to_artifact = meta.target_directory.join("arm-unknown-linux-gnueabi")
-      .join(if args.release { "release" } else { "debug" })
-      .join(match (args.example, args.bin) {
-        (_, Some(bin)) => bin.clone(),
-        (Some(ex), _) => format!("examples/{}", ex),
-        _ => package.name.clone()
-      });
-
-    info!("Collected {} native libraries for deploy", libs.len());
-    for ip in ips {
-      match Self::do_deploy(&ip, &libs, path_to_artifact.clone().into()) {
-        Ok(_) => return Ok(()),
-        Err(e) => errors.push(e)
+      for error in errors {
+        error.print()
       }
-    }
 
-    for error in errors {
-      error.print()
+      Err(Error::new("Could not connect to target.").with_remediation("Is your Robot on and connected to your computer?"))
+    } else {
+      Ok(())
     }
-
-    Err(Error::new("Could not connect to target.").with_remediation("Is your Robot on and connected to your computer?"))
   }
 
   fn do_deploy(ip: &str, libs: &Vec<PathBuf>, path_to_artifact: PathBuf) -> CargoRobotResult<()> {
