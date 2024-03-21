@@ -1,4 +1,4 @@
-use std::{io::{Read, Write}, net::ToSocketAddrs, path::{PathBuf, Path}, os::windows::fs::MetadataExt, num::ParseIntError};
+use std::{io::{Read, Write}, net::ToSocketAddrs, path::{PathBuf, Path}, num::ParseIntError};
 
 use anyhow::{anyhow, Result};
 use log::info;
@@ -83,7 +83,7 @@ impl SSHSession {
       _ => {
         info!("[SSH] Deploying: {} -> {}", filename, remote_path.to_str().unwrap());
         let mut f = std::fs::File::open(file)?;
-        let size = f.metadata()?.file_size();
+        let size = f.metadata()?.len();
 
         let mut send = self.session.scp_send(remote_path, mode, size, None)?;
         std::io::copy(&mut f, &mut send)?;
