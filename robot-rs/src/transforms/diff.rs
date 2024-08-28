@@ -4,6 +4,7 @@ use num_traits::Zero;
 
 use super::StatefulTransform;
 
+#[derive(Default)]
 pub struct DifferentiatingTransform<U, Time> {
   pub last_value: Option<(Time, U)>,
 }
@@ -14,9 +15,10 @@ impl<U, Time> DifferentiatingTransform<U, Time> {
   }
 }
 
-impl<U: Copy + Div<Time> + Sub<U, Output=U>, Time: Copy + Sub<Time, Output=Time>> StatefulTransform<U, Time> for DifferentiatingTransform<U, Time>
+impl<U: Copy + Div<Time> + Sub<U, Output = U>, Time: Copy + Sub<Time, Output = Time>>
+  StatefulTransform<U, Time> for DifferentiatingTransform<U, Time>
 where
-  <U as Div<Time>>::Output: Zero
+  <U as Div<Time>>::Output: Zero,
 {
   type Output = <U as Div<Time>>::Output;
 

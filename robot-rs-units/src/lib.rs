@@ -1,19 +1,23 @@
 pub mod base;
 pub mod electrical;
+pub mod force;
 pub mod motion;
 pub mod traits;
-pub mod force;
 
 pub use base::*;
 pub use typenum;
 
-use std::{marker::PhantomData, ops::{Mul, Add, Div, Sub, AddAssign, SubAssign, Neg}, fmt::Debug};
+use std::{
+  fmt::Debug,
+  marker::PhantomData,
+  ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
+};
 
-use approx::{RelativeEq, AbsDiffEq};
+use approx::{AbsDiffEq, RelativeEq};
 use num_traits::Zero;
 
 // Inspired by uom, but with some changes to better support our use-case.
-pub trait Dimension : Send + Sync + Unpin {
+pub trait Dimension: Send + Sync + Unpin {
   type Time: typenum::Integer;
   type Length: typenum::Integer;
   type Mass: typenum::Integer;
@@ -25,9 +29,20 @@ pub trait Dimension : Send + Sync + Unpin {
   type Tick: typenum::Integer;
 }
 
-pub type ISQ<Time, Length, Mass, Current, Temperature, Molarity, LuminousIntensity, Angle, Tick> = dyn Dimension<Time = Time, Length = Length, Mass = Mass, Current = Current, Temperature = Temperature, Molarity = Molarity, LuminousIntensity = LuminousIntensity, Angle = Angle, Tick = Tick>;
+pub type ISQ<Time, Length, Mass, Current, Temperature, Molarity, LuminousIntensity, Angle, Tick> =
+  dyn Dimension<
+    Time = Time,
+    Length = Length,
+    Mass = Mass,
+    Current = Current,
+    Temperature = Temperature,
+    Molarity = Molarity,
+    LuminousIntensity = LuminousIntensity,
+    Angle = Angle,
+    Tick = Tick,
+  >;
 
-pub trait QuantityBase : Sized {
+pub trait QuantityBase: Sized {
   type Dimension: ?Sized;
   fn new<U: Unit<Self>>(value: f64) -> Self;
   fn from_base(value: f64) -> Self;
@@ -43,16 +58,19 @@ pub trait Unit<Q> {
 // Quantities
 pub struct Quantity<Dim: ?Sized + Dimension> {
   dimension: PhantomData<Dim>,
-  base_unit_value: f64
+  base_unit_value: f64,
 }
 
 impl<Dim: ?Sized + Dimension> Clone for Quantity<Dim> {
   fn clone(&self) -> Self {
-    Self { dimension: PhantomData, base_unit_value: self.base_unit_value.clone() }
+    Self {
+      dimension: PhantomData,
+      base_unit_value: self.base_unit_value.clone(),
+    }
   }
 }
 
-impl<Dim: ?Sized + Dimension> Copy for Quantity<Dim> { }
+impl<Dim: ?Sized + Dimension> Copy for Quantity<Dim> {}
 
 impl<Dim: ?Sized + Dimension> QuantityBase for Quantity<Dim> {
   type Dimension = Dim;
@@ -60,14 +78,14 @@ impl<Dim: ?Sized + Dimension> QuantityBase for Quantity<Dim> {
   fn new<U: Unit<Self>>(value: f64) -> Self {
     Self {
       base_unit_value: (value * U::FACTOR_TO_BASE) + U::OFFSET_FROM_BASE,
-      dimension: PhantomData
+      dimension: PhantomData,
     }
   }
 
   fn from_base(value: f64) -> Self {
     Self {
       base_unit_value: value,
-      dimension: PhantomData
+      dimension: PhantomData,
     }
   }
 
@@ -81,8 +99,11 @@ impl<Dim: ?Sized + Dimension> QuantityBase for Quantity<Dim> {
 }
 
 fn format_unit(f: &mut std::fmt::Formatter<'_>, value: isize, abbrev: &str) -> std::fmt::Result {
-  if value == 1 { write!(f, " {}", abbrev)?; }
-  else if value != 0 { write!(f, " {}^{{{}}}", abbrev, value)?; }
+  if value == 1 {
+    write!(f, " {}", abbrev)?;
+  } else if value != 0 {
+    write!(f, " {}^{{{}}}", abbrev, value)?;
+  }
   Ok(())
 }
 
@@ -95,7 +116,11 @@ impl<Dim: ?Sized + Dimension> Debug for Quantity<Dim> {
     format_unit(f, <Dim::Current as typenum::Integer>::to_isize(), "A")?;
     format_unit(f, <Dim::Temperature as typenum::Integer>::to_isize(), "K")?;
     format_unit(f, <Dim::Molarity as typenum::Integer>::to_isize(), "mol")?;
-    format_unit(f, <Dim::LuminousIntensity as typenum::Integer>::to_isize(), "cd")?;
+    format_unit(
+      f,
+      <Dim::LuminousIntensity as typenum::Integer>::to_isize(),
+      "cd",
+    )?;
     format_unit(f, <Dim::Angle as typenum::Integer>::to_isize(), "rad")?;
     Ok(())
   }
@@ -113,7 +138,7 @@ impl<D: Dimension + ?Sized> Neg for Quantity<D> {
   fn neg(self) -> Self::Output {
     Quantity {
       dimension: PhantomData,
-      base_unit_value: -self.base_unit_value
+      base_unit_value: -self.base_unit_value,
     }
   }
 }
@@ -124,7 +149,7 @@ impl<D: Dimension + ?Sized> Mul<f64> for Quantity<D> {
   fn mul(self, rhs: f64) -> Self::Output {
     Quantity {
       dimension: PhantomData,
-      base_unit_value: self.base_unit_value * rhs
+      base_unit_value: self.base_unit_value * rhs,
     }
   }
 }
@@ -135,7 +160,7 @@ impl<D: Dimension + ?Sized> Mul<Quantity<D>> for f64 {
   fn mul(self, rhs: Quantity<D>) -> Self::Output {
     Quantity {
       dimension: PhantomData,
-      base_unit_value: self * rhs.base_unit_value
+      base_unit_value: self * rhs.base_unit_value,
     }
   }
 }
@@ -146,7 +171,7 @@ impl<D: Dimension + ?Sized> Div<f64> for Quantity<D> {
   fn div(self, rhs: f64) -> Self::Output {
     Quantity {
       dimension: PhantomData,
-      base_unit_value: self.base_unit_value / rhs
+      base_unit_value: self.base_unit_value / rhs,
     }
   }
 }
@@ -157,7 +182,7 @@ impl<D: Dimension + ?Sized> Div<Quantity<D>> for f64 {
   fn div(self, rhs: Quantity<D>) -> Self::Output {
     Quantity {
       dimension: PhantomData,
-      base_unit_value: self / rhs.base_unit_value
+      base_unit_value: self / rhs.base_unit_value,
     }
   }
 }
@@ -168,7 +193,7 @@ impl<D: Dimension + ?Sized> Add<Quantity<D>> for Quantity<D> {
   fn add(self, rhs: Quantity<D>) -> Self::Output {
     Quantity {
       dimension: PhantomData,
-      base_unit_value: self.base_unit_value + rhs.base_unit_value
+      base_unit_value: self.base_unit_value + rhs.base_unit_value,
     }
   }
 }
@@ -191,7 +216,7 @@ impl<D: Dimension + ?Sized> Sub<Quantity<D>> for Quantity<D> {
   fn sub(self, rhs: Quantity<D>) -> Self::Output {
     Quantity {
       dimension: PhantomData,
-      base_unit_value: self.base_unit_value - rhs.base_unit_value
+      base_unit_value: self.base_unit_value - rhs.base_unit_value,
     }
   }
 }
@@ -228,7 +253,7 @@ where
       <Dl::LuminousIntensity as Add<Dr::LuminousIntensity>>::Output,
       <Dl::Angle as Add<Dr::Angle>>::Output,
       <Dl::Tick as Add<Dr::Tick>>::Output,
-    >
+    >,
   >;
 
   fn mul(self, rhs: Quantity<Dr>) -> Self::Output {
@@ -271,7 +296,7 @@ where
       <Dl::LuminousIntensity as Sub<Dr::LuminousIntensity>>::Output,
       <Dl::Angle as Sub<Dr::Angle>>::Output,
       <Dl::Tick as Sub<Dr::Tick>>::Output,
-    >
+    >,
   >;
 
   fn div(self, rhs: Quantity<Dr>) -> Self::Output {
@@ -300,27 +325,47 @@ impl<D: Dimension + ?Sized> AbsDiffEq<Quantity<D>> for Quantity<D> {
   type Epsilon = Quantity<D>;
 
   fn default_epsilon() -> Self::Epsilon {
-    Quantity { base_unit_value: f64::default_epsilon(), dimension: PhantomData }
+    Quantity {
+      base_unit_value: f64::default_epsilon(),
+      dimension: PhantomData,
+    }
   }
 
   fn abs_diff_eq(&self, other: &Quantity<D>, epsilon: Self::Epsilon) -> bool {
-    other.base_unit_value.abs_diff_eq(&other.base_unit_value, epsilon.base_unit_value)
+    other
+      .base_unit_value
+      .abs_diff_eq(&other.base_unit_value, epsilon.base_unit_value)
   }
 }
 
 impl<D: Dimension + ?Sized> RelativeEq<Quantity<D>> for Quantity<D> {
   fn default_max_relative() -> Self::Epsilon {
-    Quantity { base_unit_value: f64::default_max_relative(), dimension: PhantomData }
+    Quantity {
+      base_unit_value: f64::default_max_relative(),
+      dimension: PhantomData,
+    }
   }
 
-  fn relative_eq(&self, other: &Quantity<D>, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
-    other.base_unit_value.relative_eq(&other.base_unit_value, epsilon.base_unit_value, max_relative.base_unit_value)
+  fn relative_eq(
+    &self,
+    other: &Quantity<D>,
+    epsilon: Self::Epsilon,
+    max_relative: Self::Epsilon,
+  ) -> bool {
+    other.base_unit_value.relative_eq(
+      &other.base_unit_value,
+      epsilon.base_unit_value,
+      max_relative.base_unit_value,
+    )
   }
 }
 
 impl<D: Dimension + ?Sized> Zero for Quantity<D> {
   fn zero() -> Self {
-    Quantity { dimension: PhantomData, base_unit_value: f64::zero() }
+    Quantity {
+      dimension: PhantomData,
+      base_unit_value: f64::zero(),
+    }
   }
 
   fn is_zero(&self) -> bool {
@@ -345,5 +390,5 @@ macro_rules! unit {
         <$qty>::new::<$name>(self)
       }
     }
-  }
+  };
 }

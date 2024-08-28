@@ -1,7 +1,6 @@
+use typenum::{N2, P1, P2, Z0};
 
-use typenum::{N2, P1, Z0, P2};
-
-use super::{Unit, Quantity, ISQ, QuantityBase};
+use super::{Quantity, QuantityBase, Unit, ISQ};
 use crate::unit;
 
 pub type Force = Quantity<ISQ<N2, P1, P1, Z0, Z0, Z0, Z0, Z0, Z0>>;

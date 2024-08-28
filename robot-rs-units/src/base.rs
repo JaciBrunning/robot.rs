@@ -2,20 +2,20 @@ use std::f64::consts::PI;
 
 use typenum::{P1, Z0};
 
+use super::{Quantity, QuantityBase, Unit, ISQ};
 use crate::unit;
-use super::{Unit, Quantity, ISQ, QuantityBase};
 
 // Base Units
-pub type Unitless           = Quantity<ISQ<Z0, Z0, Z0, Z0, Z0, Z0, Z0, Z0, Z0>>;
-pub type Time               = Quantity<ISQ<P1, Z0, Z0, Z0, Z0, Z0, Z0, Z0, Z0>>;
-pub type Length             = Quantity<ISQ<Z0, P1, Z0, Z0, Z0, Z0, Z0, Z0, Z0>>;
-pub type Mass               = Quantity<ISQ<Z0, Z0, P1, Z0, Z0, Z0, Z0, Z0, Z0>>;
-pub type Current            = Quantity<ISQ<Z0, Z0, Z0, P1, Z0, Z0, Z0, Z0, Z0>>;
-pub type Temperature        = Quantity<ISQ<Z0, Z0, Z0, Z0, P1, Z0, Z0, Z0, Z0>>;
-pub type Molarity           = Quantity<ISQ<Z0, Z0, Z0, Z0, Z0, P1, Z0, Z0, Z0>>;
-pub type LuminousIntensity  = Quantity<ISQ<Z0, Z0, Z0, Z0, Z0, Z0, P1, Z0, Z0>>;
-pub type Angle              = Quantity<ISQ<Z0, Z0, Z0, Z0, Z0, Z0, Z0, P1, Z0>>;
-pub type Ticks              = Quantity<ISQ<Z0, Z0, Z0, Z0, Z0, Z0, Z0, Z0, P1>>;
+pub type Unitless = Quantity<ISQ<Z0, Z0, Z0, Z0, Z0, Z0, Z0, Z0, Z0>>;
+pub type Time = Quantity<ISQ<P1, Z0, Z0, Z0, Z0, Z0, Z0, Z0, Z0>>;
+pub type Length = Quantity<ISQ<Z0, P1, Z0, Z0, Z0, Z0, Z0, Z0, Z0>>;
+pub type Mass = Quantity<ISQ<Z0, Z0, P1, Z0, Z0, Z0, Z0, Z0, Z0>>;
+pub type Current = Quantity<ISQ<Z0, Z0, Z0, P1, Z0, Z0, Z0, Z0, Z0>>;
+pub type Temperature = Quantity<ISQ<Z0, Z0, Z0, Z0, P1, Z0, Z0, Z0, Z0>>;
+pub type Molarity = Quantity<ISQ<Z0, Z0, Z0, Z0, Z0, P1, Z0, Z0, Z0>>;
+pub type LuminousIntensity = Quantity<ISQ<Z0, Z0, Z0, Z0, Z0, Z0, P1, Z0, Z0>>;
+pub type Angle = Quantity<ISQ<Z0, Z0, Z0, Z0, Z0, Z0, Z0, P1, Z0>>;
+pub type Ticks = Quantity<ISQ<Z0, Z0, Z0, Z0, Z0, Z0, Z0, Z0, P1>>;
 
 impl From<f64> for Unitless {
   fn from(value: f64) -> Self {

@@ -1,8 +1,13 @@
-use std::{io::{Read, Write}, net::ToSocketAddrs, path::{PathBuf, Path}, os::windows::fs::MetadataExt, num::ParseIntError};
+use std::{
+  io::{Read, Write},
+  net::ToSocketAddrs,
+  num::ParseIntError,
+  path::{Path, PathBuf},
+};
 
 use anyhow::{anyhow, Result};
 use log::info;
-use sha1::{Sha1, Digest};
+use sha1::{Digest, Sha1};
 use ssh2::Channel;
 
 pub struct SSHSession {
@@ -11,7 +16,10 @@ pub struct SSHSession {
 
 impl SSHSession {
   pub fn connect(addr: impl ToSocketAddrs, user: &str, password: &str) -> Result<SSHSession> {
-    let addr = addr.to_socket_addrs()?.next().ok_or(anyhow!("Invalid Address"))?;
+    let addr = addr
+      .to_socket_addrs()?
+      .next()
+      .ok_or(anyhow!("Invalid Address"))?;
     let user = user.to_owned();
     let password = password.to_owned();
 
@@ -61,29 +69,40 @@ impl SSHSession {
     })
   }
 
-  pub fn maybe_copy_file(&self, file: &PathBuf, remote_path: &Path, mode: i32, checksum: bool) -> Result<()> {
+  pub fn maybe_copy_file(
+    &self,
+    file: &PathBuf,
+    remote_path: &Path,
+    mode: i32,
+    checksum: bool,
+  ) -> Result<()> {
     let mut channel = self.session.channel_session()?;
 
     let mut hasher = <Sha1 as Digest>::new();
     hasher.update(std::fs::read(file)?);
     let our_hash = hasher.finalize();
 
-    let their_hash = match self.run_with_channel(&mut channel, &format!("cat {}.sha1", remote_path.to_str().unwrap())) {
-      Ok(v) if v.success() => {
-        decode_hex(&v.output.trim()).ok()
-      },
-      _ => None
+    let their_hash = match self.run_with_channel(
+      &mut channel,
+      &format!("cat {}.sha1", remote_path.to_str().unwrap()),
+    ) {
+      Ok(v) if v.success() => decode_hex(&v.output.trim()).ok(),
+      _ => None,
     };
 
     let filename = file.file_name().unwrap().to_str().unwrap();
     match (our_hash, their_hash, checksum) {
-      (ours, Some(theirs), true) if &ours[..] == &theirs[..] => {
+      (ours, Some(theirs), true) if ours[..] == theirs[..] => {
         info!("[SSH] {} up to date!", filename);
-      },
+      }
       _ => {
-        info!("[SSH] Deploying: {} -> {}", filename, remote_path.to_str().unwrap());
+        info!(
+          "[SSH] Deploying: {} -> {}",
+          filename,
+          remote_path.to_str().unwrap()
+        );
         let mut f = std::fs::File::open(file)?;
-        let size = f.metadata()?.file_size();
+        let size = f.metadata()?.len();
 
         let mut send = self.session.scp_send(remote_path, mode, size, None)?;
         std::io::copy(&mut f, &mut send)?;
@@ -91,7 +110,11 @@ impl SSHSession {
         send.wait_eof()?;
 
         if checksum {
-          self.run(&format!("echo {} > {}.sha1", encode_hex(&our_hash[..]), remote_path.to_str().unwrap()))?;
+          self.run(&format!(
+            "echo {} > {}.sha1",
+            encode_hex(&our_hash[..]),
+            remote_path.to_str().unwrap()
+          ))?;
         }
       }
     }

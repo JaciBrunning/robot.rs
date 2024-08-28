@@ -36,12 +36,12 @@ pub fn impl_perform_for_tuple(_item: TokenStream) -> TokenStream {
       #[async_trait::async_trait]
       impl<#(#types: Send + 'static),*> #trait_ident for (#(Arc<System<#types>>,)*) {
         #(type #types = #types;)*
-        
+
         async fn perform<O: Send, F>(self, priority: Priority, f: F) -> Option<O>
           where F: for<'a> FnOnce( (#(&'a mut Self::#types),*) ) -> Pin<Box<dyn Future<Output = O> + 'a + Send>> + Send
         {
           let channels = ( #(#channels,)* );
-          
+
           let mut vals = {
             let mut locks = (#(self.#is.storage.lock().await,)*);
 
@@ -65,9 +65,9 @@ pub fn impl_perform_for_tuple(_item: TokenStream) -> TokenStream {
           }
         }
       }
-    } 
+    }
   });
-  
+
   let q = quote! {
     #(#inner)*
   };

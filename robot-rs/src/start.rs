@@ -1,14 +1,20 @@
-use std::{error::Error, sync::{atomic::AtomicBool, Arc}};
+use std::{
+  error::Error,
+  sync::{atomic::AtomicBool, Arc},
+};
 
-use log::{error, warn, info};
-use ntcore_rs::{NetworkTableInstance, ServerConfig};
 use crate::ds::{observe, RobotControlState};
 #[cfg(feature = "hal")]
-use crate::hal::{HAL_Initialize, HAL_SetNotifierThreadPriority, hal_safe_call, HAL_HasMain, HAL_Shutdown, HAL_ExitMain, HAL_RunMain};
+use crate::hal::{
+  hal_safe_call, HAL_ExitMain, HAL_HasMain, HAL_Initialize, HAL_RunMain,
+  HAL_SetNotifierThreadPriority, HAL_Shutdown,
+};
+use log::{error, info, warn};
+use ntcore_rs::{NetworkTableInstance, ServerConfig};
 
 #[derive(Clone)]
 pub struct RobotState {
-  pub(crate) inner: Arc<AtomicBool>
+  pub(crate) inner: Arc<AtomicBool>,
 }
 
 impl RobotState {
@@ -55,7 +61,7 @@ macro_rules! robot_main {
         } => Ok(())
       }
     }
-  }
+  };
 }
 
 pub type RobotResult = Result<(), Box<dyn Error>>;
@@ -84,17 +90,23 @@ pub fn init_all<F: FnOnce(RobotState) -> Result<(), Box<dyn Error>> + Send + 'st
 
       info!("HAL has main. Running user program in a new thread.");
 
-      let r2 = RobotState { inner: running.clone() };
+      let r2 = RobotState {
+        inner: running.clone(),
+      };
       let user_thread = std::thread::spawn(move || {
         match f(r2) {
-          Ok(()) => { warn!("Robot Exited Gracefully") },
-          Err(e) => error!("Robot Error: {}", e)
+          Ok(()) => {
+            warn!("Robot Exited Gracefully")
+          }
+          Err(e) => error!("Robot Error: {}", e),
         };
 
         unsafe { HAL_ExitMain() };
       });
 
-      unsafe { HAL_RunMain(); }
+      unsafe {
+        HAL_RunMain();
+      }
 
       running.store(false, std::sync::atomic::Ordering::Relaxed);
 
@@ -104,7 +116,7 @@ pub fn init_all<F: FnOnce(RobotState) -> Result<(), Box<dyn Error>> + Send + 'st
       match f(RobotState { inner: running }) {
         Ok(()) => {
           warn!("Robot Exited Gracefully")
-        },
+        }
         Err(e) => {
           error!("Robot Error: {}", e)
         }
@@ -117,7 +129,7 @@ pub fn init_all<F: FnOnce(RobotState) -> Result<(), Box<dyn Error>> + Send + 'st
     match f(RobotState { inner: running }) {
       Ok(()) => {
         warn!("Robot Exited Gracefully")
-      },
+      }
       Err(e) => {
         error!("Robot Error: {}", e)
       }
@@ -125,11 +137,16 @@ pub fn init_all<F: FnOnce(RobotState) -> Result<(), Box<dyn Error>> + Send + 'st
   }
 
   #[cfg(feature = "hal")]
-  unsafe { HAL_Shutdown() };
+  unsafe {
+    HAL_Shutdown()
+  };
 }
 
 pub fn log_init() {
-  env_logger::builder().filter_level(log::LevelFilter::Info).target(env_logger::Target::Stdout).init();
+  env_logger::builder()
+    .filter_level(log::LevelFilter::Info)
+    .target(env_logger::Target::Stdout)
+    .init();
 }
 
 #[cfg(feature = "hal")]
@@ -147,4 +164,4 @@ pub fn hal_init() {
 }
 
 #[cfg(not(feature = "hal"))]
-pub fn hal_init() { }
+pub fn hal_init() {}

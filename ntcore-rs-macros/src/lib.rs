@@ -1,6 +1,6 @@
 use darling::FromAttributes;
-use syn::{DeriveInput, parse_macro_input};
 use quote::quote;
+use syn::{parse_macro_input, DeriveInput};
 
 #[derive(Debug, FromAttributes)]
 #[darling(attributes(nt))]
@@ -11,7 +11,11 @@ struct StructReceiver {
 #[proc_macro_derive(NTStruct, attributes(nt))]
 pub fn derive_marshal(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
   let DeriveInput {
-    attrs, vis: _, ident, generics: _, data
+    attrs,
+    vis: _,
+    ident,
+    generics: _,
+    data,
   } = parse_macro_input!(input as DeriveInput);
 
   let our_attrs = StructReceiver::from_attributes(&attrs).unwrap();
@@ -31,9 +35,9 @@ pub fn derive_marshal(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             let fident = field.ident.unwrap();
             let fname = fident.to_string();
             schema.push(quote!{ schema.push(format!("{} {}", <#fty as NTStruct>::TYPE_STRING_FRAG, #fname)) });
-            reads.push(quote!{ #fident: <#fty as NTStruct>::read(buf)? });
-            writes.push(quote!{ NTStruct::write(&self.#fident, buf)? });
-            schema_pubs.push(quote!{ <#fty as NTStruct>::publish_schema(inst) });
+            reads.push(quote! { #fident: <#fty as NTStruct>::read(buf)? });
+            writes.push(quote! { NTStruct::write(&self.#fident, buf)? });
+            schema_pubs.push(quote! { <#fty as NTStruct>::publish_schema(inst) });
           }
 
           quote! {
@@ -67,10 +71,10 @@ pub fn derive_marshal(input: proc_macro::TokenStream) -> proc_macro::TokenStream
               }
             }
           }.into()
-        },
+        }
         _ => panic!("NTStruct only works on structs with named fields"),
       }
-    },
-    _ => panic!("NTStruct only works on structs!")
+    }
+    _ => panic!("NTStruct only works on structs!"),
   }
 }

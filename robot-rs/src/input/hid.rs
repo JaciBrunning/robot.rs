@@ -1,5 +1,8 @@
 #[cfg(feature = "hal")]
-use robot_rs_wpilib_sys::{HAL_JoystickDescriptor, HAL_GetJoystickDescriptor, HAL_JoystickButtons, HAL_GetJoystickButtons, HAL_JoystickAxes, HAL_GetJoystickAxes, HAL_GetJoystickPOVs, HAL_JoystickPOVs};
+use robot_rs_wpilib_sys::{
+  HAL_GetJoystickAxes, HAL_GetJoystickButtons, HAL_GetJoystickDescriptor, HAL_GetJoystickPOVs,
+  HAL_JoystickAxes, HAL_JoystickButtons, HAL_JoystickDescriptor, HAL_JoystickPOVs,
+};
 
 use crate::sensors::Sensor;
 
@@ -9,7 +12,7 @@ pub trait HIDDevice {
   type POV: Sensor<isize>;
 
   // Note that these aren't Option<>s, primarily since the joystick descriptor might change
-  // throughout the course of the user program as the DS connects and disconnects, hence 
+  // throughout the course of the user program as the DS connects and disconnects, hence
   // we defer failures to Option<> in Sensor returning None
   fn button(&self, index: usize) -> Self::Button;
   fn axis(&self, index: usize) -> Self::Axis;
@@ -25,7 +28,8 @@ pub trait HIDDevice {
 #[cfg(feature = "hal")]
 #[derive(Debug, Clone, Copy)]
 pub struct DriverStationHIDButton {
-  port: usize, index: usize
+  port: usize,
+  index: usize,
 }
 
 #[cfg(feature = "hal")]
@@ -48,7 +52,8 @@ impl Sensor<bool> for DriverStationHIDButton {
 #[cfg(feature = "hal")]
 #[derive(Debug, Clone, Copy)]
 pub struct DriverStationHIDAxis {
-  port: usize, index: usize
+  port: usize,
+  index: usize,
 }
 
 #[cfg(feature = "hal")]
@@ -67,7 +72,8 @@ impl Sensor<f64> for DriverStationHIDAxis {
 #[cfg(feature = "hal")]
 #[derive(Debug, Clone, Copy)]
 pub struct DriverStationHIDPOV {
-  port: usize, index: usize
+  port: usize,
+  index: usize,
 }
 
 #[cfg(feature = "hal")]
@@ -86,7 +92,7 @@ impl Sensor<isize> for DriverStationHIDPOV {
 #[cfg(feature = "hal")]
 #[derive(Debug, Clone)]
 pub struct DriverStationHID {
-  port: usize
+  port: usize,
 }
 
 #[cfg(feature = "hal")]
@@ -112,30 +118,54 @@ impl HIDDevice for DriverStationHID {
   type POV = DriverStationHIDPOV;
 
   fn button(&self, index: usize) -> Self::Button {
-    DriverStationHIDButton { port: self.port, index }
+    DriverStationHIDButton {
+      port: self.port,
+      index,
+    }
   }
 
   fn axis(&self, index: usize) -> Self::Axis {
-    DriverStationHIDAxis { port: self.port, index }
+    DriverStationHIDAxis {
+      port: self.port,
+      index,
+    }
   }
 
   fn pov(&self, index: usize) -> Self::POV {
-    DriverStationHIDPOV { port: self.port, index }
+    DriverStationHIDPOV {
+      port: self.port,
+      index,
+    }
   }
 
   fn n_buttons(&self) -> usize {
-    self.get_descriptor().map(|x| x.buttonCount as usize).unwrap_or(0)
+    self
+      .get_descriptor()
+      .map(|x| x.buttonCount as usize)
+      .unwrap_or(0)
   }
 
   fn n_axes(&self) -> usize {
-    self.get_descriptor().map(|x| x.axisCount as usize).unwrap_or(0)
+    self
+      .get_descriptor()
+      .map(|x| x.axisCount as usize)
+      .unwrap_or(0)
   }
 
   fn n_pov(&self) -> usize {
-    self.get_descriptor().map(|x| x.povCount as usize).unwrap_or(0)
+    self
+      .get_descriptor()
+      .map(|x| x.povCount as usize)
+      .unwrap_or(0)
   }
 
   fn name(&self) -> Option<String> {
-    unsafe { Some(std::ffi::CStr::from_ptr(self.get_descriptor()?.name.as_ptr()).to_string_lossy().to_string()) }
+    unsafe {
+      Some(
+        std::ffi::CStr::from_ptr(self.get_descriptor()?.name.as_ptr())
+          .to_string_lossy()
+          .to_string(),
+      )
+    }
   }
 }

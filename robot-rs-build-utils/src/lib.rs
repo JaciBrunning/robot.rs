@@ -1,4 +1,8 @@
-use std::{path::{PathBuf, Path}, error::Error, io::{Read, Write}};
+use std::{
+  error::Error,
+  io::{Read, Write},
+  path::{Path, PathBuf},
+};
 
 use cargo_metadata::{Metadata, MetadataCommand, Package};
 use sha2::{Digest, Sha256};
@@ -6,7 +10,7 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Copy)]
 pub enum Profile {
   Debug,
-  Release
+  Release,
 }
 
 // FROM https://github.com/rust-lang/cargo/issues/9661
@@ -35,18 +39,27 @@ pub fn target_triple_to_wpi(target: &str) -> Result<[&'static str; 2], Box<dyn E
     "x64_64-apple-darwin" => Ok(["osx", "universal"]),
     "x86_64-pc-windows-msvc" => Ok(["windows", "x86-64"]),
     "aarch64-pc-windows-msvc" => Ok(["windows", "arm64"]),
-    _ => Err(anyhow::anyhow!("Unknown Target: {}", target).into())
+    _ => Err(anyhow::anyhow!("Unknown Target: {}", target).into()),
   }
 }
 
 pub fn get_meta() -> Result<Metadata, Box<dyn Error>> {
   let path = std::env::var("CARGO_MANIFEST_DIR")?;
-  let meta = MetadataCommand::new().manifest_path("./Cargo.toml").current_dir(&path).exec()?;
+  let meta = MetadataCommand::new()
+    .manifest_path("./Cargo.toml")
+    .current_dir(&path)
+    .exec()?;
   Ok(meta)
 }
 
-pub fn maybe_download_libs(package: &Package, target: &str, profile: Profile) -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>), Box<dyn Error>> {
-  let robot_rs_dir = home::home_dir().ok_or(anyhow::anyhow!("Can't get your home directory :("))?.join(".robotrs");
+pub fn maybe_download_libs(
+  package: &Package,
+  target: &str,
+  profile: Profile,
+) -> Result<(Vec<PathBuf>, Vec<PathBuf>, Vec<PathBuf>), Box<dyn Error>> {
+  let robot_rs_dir = home::home_dir()
+    .ok_or(anyhow::anyhow!("Can't get your home directory :("))?
+    .join(".robotrs");
 
   let download_folder = robot_rs_dir.join("mavenlibs");
 
@@ -68,39 +81,87 @@ pub fn maybe_download_libs(package: &Package, target: &str, profile: Profile) ->
     match (artifacts, mavens) {
       (Some(artifacts), Some(mavens)) => {
         for item in artifacts.into_iter() {
-          let maven = mavens.get(item.get("maven").and_then(|x| x.as_str()).ok_or(anyhow::anyhow!("Artifact object without 'maven' key"))?)
+          let maven = mavens
+            .get(
+              item
+                .get("maven")
+                .and_then(|x| x.as_str())
+                .ok_or(anyhow::anyhow!("Artifact object without 'maven' key"))?,
+            )
             .and_then(|x| x.as_str())
             .ok_or(anyhow::anyhow!("Missing Maven Repository"))?;
-          let artifact = item.get("artifact").and_then(|x| x.as_str()).ok_or(anyhow::anyhow!("Artifact object without 'artifact' key"))?;
+          let artifact = item
+            .get("artifact")
+            .and_then(|x| x.as_str())
+            .ok_or(anyhow::anyhow!("Artifact object without 'artifact' key"))?;
           let only = item.get("only").and_then(|x| x.as_array());
-          let no_headers = item.get("no_headers").and_then(|x| x.as_bool()).unwrap_or(false);
-          let link_only = item.get("link_only").and_then(|x| x.as_bool()).unwrap_or(false);
+          let no_headers = item
+            .get("no_headers")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false);
+          let link_only = item
+            .get("link_only")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false);
 
           if let Some(only) = only {
             let mut found = false;
             for el in only.into_iter() {
-              if el.as_str().ok_or(anyhow::anyhow!("'only' values should be strings"))? == classifier_platform {
+              if el
+                .as_str()
+                .ok_or(anyhow::anyhow!("'only' values should be strings"))?
+                == classifier_platform
+              {
                 found = true;
               }
             }
             if !found {
-              continue
+              continue;
             }
           }
 
           let mut split_artifact = artifact.split(":");
-          let group = split_artifact.next().ok_or(anyhow::anyhow!("Missing Artifact Group"))?;
-          let name = split_artifact.next().ok_or(anyhow::anyhow!("Missing Artifact Name"))?;
-          let version = split_artifact.next().ok_or(anyhow::anyhow!("Missing Artifact Version"))?;
+          let group = split_artifact
+            .next()
+            .ok_or(anyhow::anyhow!("Missing Artifact Group"))?;
+          let name = split_artifact
+            .next()
+            .ok_or(anyhow::anyhow!("Missing Artifact Name"))?;
+          let version = split_artifact
+            .next()
+            .ok_or(anyhow::anyhow!("Missing Artifact Version"))?;
 
-          let fragment = format!("{}/{}/{}/{}-{}-{}{}.zip", group.replace(".", "/"), name, version, name, version, classifier_platform, classifier_suffix);
-          let header_fragment = format!("{}/{}/{}/{}-{}-headers.zip", group.replace(".", "/"), name, version, name, version);
+          let fragment = format!(
+            "{}/{}/{}/{}-{}-{}{}.zip",
+            group.replace(".", "/"),
+            name,
+            version,
+            name,
+            version,
+            classifier_platform,
+            classifier_suffix
+          );
+          let header_fragment = format!(
+            "{}/{}/{}/{}-{}-headers.zip",
+            group.replace(".", "/"),
+            name,
+            version,
+            name,
+            version
+          );
 
           let artifact_url = format!("{}/{}", maven, fragment);
           let headers_url = format!("{}/{}", maven, header_fragment);
 
-          let extracted_dir = try_download_and_extract(&artifact_url, &download_folder.join(fragment), &robot_rs_dir)?;
-          let inner_path = extracted_dir.join(target_platform).join(architecture).join("shared");
+          let extracted_dir = try_download_and_extract(
+            &artifact_url,
+            &download_folder.join(fragment),
+            &robot_rs_dir,
+          )?;
+          let inner_path = extracted_dir
+            .join(target_platform)
+            .join(architecture)
+            .join("shared");
 
           linktime.push(inner_path.clone());
           if !link_only {
@@ -108,23 +169,42 @@ pub fn maybe_download_libs(package: &Package, target: &str, profile: Profile) ->
           }
 
           if !no_headers {
-            let extracted_dir = try_download_and_extract(&headers_url, &download_folder.join(header_fragment), &robot_rs_dir)?;
+            let extracted_dir = try_download_and_extract(
+              &headers_url,
+              &download_folder.join(header_fragment),
+              &robot_rs_dir,
+            )?;
             header_dirs.push(extracted_dir)
           }
         }
-      },
-      _ => ()
+      }
+      _ => (),
     }
   }
   Ok((header_dirs, linktime, runtime))
 }
 
-fn try_download_and_extract(url: &str, target_path: &Path, robot_rs_dir: &Path) -> Result<PathBuf, Box<dyn Error>> {
-  let hash_file = Path::new(&format!("{}.sha256", target_path.as_os_str().to_string_lossy())).to_owned();
+fn try_download_and_extract(
+  url: &str,
+  target_path: &Path,
+  robot_rs_dir: &Path,
+) -> Result<PathBuf, Box<dyn Error>> {
+  let hash_file = Path::new(&format!(
+    "{}.sha256",
+    target_path.as_os_str().to_string_lossy()
+  ))
+  .to_owned();
   if !hash_file.exists() || !Path::new(target_path).exists() {
     println!("cargo:warning=Downloading: {}", url);
     let mut resp = reqwest::blocking::get(url)?;
-    std::fs::create_dir_all(PathBuf::from(target_path).parent().unwrap().as_os_str().to_str().unwrap())?;
+    std::fs::create_dir_all(
+      PathBuf::from(target_path)
+        .parent()
+        .unwrap()
+        .as_os_str()
+        .to_str()
+        .unwrap(),
+    )?;
     let mut f = std::fs::File::create(target_path)?;
     std::io::copy(&mut resp, &mut f)?;
   }
@@ -173,7 +253,10 @@ fn extract(target_path: &Path, extract_path: &Path) -> Result<(), Box<dyn Error>
   for i in 0..zip.len() {
     let mut inner_file = zip.by_index(i)?;
     if inner_file.is_file() {
-      let inner_path = inner_file.enclosed_name().ok_or(anyhow::anyhow!("Dangerous ZIP File - Path Traversal detected: {}", target_path.as_os_str().to_string_lossy()))?;
+      let inner_path = inner_file.enclosed_name().ok_or(anyhow::anyhow!(
+        "Dangerous ZIP File - Path Traversal detected: {}",
+        target_path.as_os_str().to_string_lossy()
+      ))?;
       let joined_path = extract_path.join(inner_path);
       if !joined_path.exists() {
         std::fs::create_dir_all(joined_path.parent().unwrap().as_os_str().to_str().unwrap())?;
@@ -197,7 +280,7 @@ pub fn link_against(target: &str, linktime_dirs: Vec<PathBuf>) -> Result<(), Box
       let path = path?;
       let filename = path.file_name();
       let filename = filename.to_string_lossy();
-      
+
       match target_platform {
         "windows" => {
           if filename.ends_with(".lib") {
@@ -205,10 +288,13 @@ pub fn link_against(target: &str, linktime_dirs: Vec<PathBuf>) -> Result<(), Box
             println!("cargo:rustc-link-lib={}", libname);
             println!("cargo:rustc-link-search={}", dir.to_string_lossy());
           }
-        },
+        }
         "linux" => {
           if filename.starts_with("lib") {
-            if !filename.ends_with(".so") && !filename.ends_with(".so.debug") && filename.contains(".so") {
+            if !filename.ends_with(".so")
+              && !filename.ends_with(".so.debug")
+              && filename.contains(".so")
+            {
               // Need to copy the lib and drop the version suffix
               let mut split = filename.split(".so");
               let lib_name_with_lib = split.next().unwrap().to_owned();
@@ -223,7 +309,7 @@ pub fn link_against(target: &str, linktime_dirs: Vec<PathBuf>) -> Result<(), Box
               println!("cargo:rustc-link-search={}", dir.to_string_lossy());
             }
           }
-        },
+        }
         "osx" => {
           if filename.starts_with("lib") && filename.ends_with(".dylib") {
             let libname = &filename[3..filename.len() - 6];
@@ -231,7 +317,7 @@ pub fn link_against(target: &str, linktime_dirs: Vec<PathBuf>) -> Result<(), Box
             println!("cargo:rustc-link-search={}", dir.to_string_lossy());
           }
         }
-        _ => Err(anyhow::anyhow!("Unknown Platform: {}", target_platform))?
+        _ => Err(anyhow::anyhow!("Unknown Platform: {}", target_platform))?,
       }
     }
   }
@@ -240,7 +326,9 @@ pub fn link_against(target: &str, linktime_dirs: Vec<PathBuf>) -> Result<(), Box
 
 pub fn define_environment(target: &str) {
   match target {
-    "arm-unknown-linux-gnueabi" | "armv7-unknown-linux-gnueabi" => println!("cargo:rustc-cfg=native"),
-    _ => println!("cargo:rustc-cfg=simulation")
+    "arm-unknown-linux-gnueabi" | "armv7-unknown-linux-gnueabi" => {
+      println!("cargo:rustc-cfg=native")
+    }
+    _ => println!("cargo:rustc-cfg=simulation"),
   }
 }

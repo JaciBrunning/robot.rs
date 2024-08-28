@@ -1,5 +1,8 @@
-use std::{ffi::CStr, fmt::{Debug, Display}};
 use crate::HAL_GetLastError;
+use std::{
+  ffi::CStr,
+  fmt::{Debug, Display},
+};
 
 // Parts borrowed from https://github.com/first-rust-competition/first-rust-competition/blob/master/wpilib-sys/src/hal_call.rs
 #[derive(Debug)]

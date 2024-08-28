@@ -1,8 +1,8 @@
 use std::ops::{Div, Mul, Sub};
 
-use ntcore_rs::{Entry, Publisher, Topic, GenericPublisher, GenericSubscriber};
+use ntcore_rs::{Entry, GenericPublisher, GenericSubscriber, Publisher, Topic};
 use num_traits::Zero;
-use robot_rs_units::traits::{ToFloat, FromFloat};
+use robot_rs_units::traits::{FromFloat, ToFloat};
 
 use super::{HasSetpoint, StatefulTransform};
 
@@ -17,10 +17,9 @@ pub type Kd<PV, Output, Time> = <Output as Div<Derivative<PV, Time>>>::Output;
 pub struct PIDMeasurement<
   PV: Mul<Time> + Div<Time>,
   Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output>,
-  Time
->
-where
-  Integral<PV, Time>: Copy
+  Time,
+> where
+  Integral<PV, Time>: Copy,
 {
   pub time: Time,
   pub setpoint: PV,
@@ -34,36 +33,42 @@ where
 pub struct PID<
   PV: Mul<Time> + Div<Time>,
   Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output>,
-  Time
->
-where
-  Integral<PV, Time>: Copy
+  Time,
+> where
+  Integral<PV, Time>: Copy,
 {
   kp: Kp<PV, Output>,
   ki: Ki<PV, Output, Time>,
   kd: Kd<PV, Output, Time>,
   setpoint: PV,
-  last: Option<PIDMeasurement<PV, Output, Time>>
+  last: Option<PIDMeasurement<PV, Output, Time>>,
 }
 
 impl<
-  PV: Mul<Time> + Div<Time> + Copy,
-  Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Copy,
-  Time: Copy
-> PID<PV, Output, Time>
+    PV: Mul<Time> + Div<Time> + Copy,
+    Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Copy,
+    Time: Copy,
+  > PID<PV, Output, Time>
 where
-  Integral<PV, Time>: Copy
+  Integral<PV, Time>: Copy,
 {
-  pub fn new(kp: Kp<PV, Output>, ki: Ki<PV, Output, Time>, kd: Kd<PV, Output, Time>, setpoint: PV) -> Self {
+  pub fn new(
+    kp: Kp<PV, Output>,
+    ki: Ki<PV, Output, Time>,
+    kd: Kd<PV, Output, Time>,
+    setpoint: PV,
+  ) -> Self {
     Self {
-      kp, ki, kd,
+      kp,
+      ki,
+      kd,
       setpoint,
-      last: None
+      last: None,
     }
   }
 
   pub fn last(&self) -> Option<PIDMeasurement<PV, Output, Time>> {
-    self.last.clone()
+    self.last
   }
 
   pub fn tunable(self, topic: Topic) -> TunablePID<PV, Output, Time> {
@@ -72,12 +77,12 @@ where
 }
 
 impl<
-  PV: Mul<Time> + Div<Time> + Copy,
-  Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy,
-  Time: Sub<Time, Output = Time> + Copy
-> HasSetpoint<PV> for PID<PV, Output, Time>
+    PV: Mul<Time> + Div<Time> + Copy,
+    Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy,
+    Time: Sub<Time, Output = Time> + Copy,
+  > HasSetpoint<PV> for PID<PV, Output, Time>
 where
-  Integral<PV, Time>: Copy
+  Integral<PV, Time>: Copy,
 {
   fn set_setpoint(&mut self, sp: PV) {
     self.setpoint = sp;
@@ -85,10 +90,10 @@ where
 }
 
 impl<
-  PV: Mul<Time> + Div<Time> + Copy,
-  Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy,
-  Time: Sub<Time, Output = Time> + Copy
-> StatefulTransform<PV, Time> for PID<PV, Output, Time>
+    PV: Mul<Time> + Div<Time> + Copy,
+    Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy,
+    Time: Sub<Time, Output = Time> + Copy,
+  > StatefulTransform<PV, Time> for PID<PV, Output, Time>
 where
   PV: Mul<Kp<PV, Output>, Output = Output> + Sub<PV, Output = PV>,
   Integral<PV, Time>: Copy + Zero + Mul<Ki<PV, Output, Time>, Output = Output>,
@@ -112,7 +117,7 @@ where
 
         let integral_sum = last.integral_sum + integral;
 
-        let parts = ( error * self.kp, integral_sum * self.ki, deriv * self.kd );
+        let parts = (error * self.kp, integral_sum * self.ki, deriv * self.kd);
         let output = parts.0 + parts.1 + parts.2;
 
         PIDMeasurement {
@@ -122,9 +127,9 @@ where
           error,
           integral_sum,
           output,
-          output_parts: parts
+          output_parts: parts,
         }
-      },
+      }
       None => PIDMeasurement {
         time: now,
         setpoint: self.setpoint,
@@ -150,8 +155,10 @@ where
 pub struct TunablePID<
   PV: Mul<Time> + Div<Time>,
   Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output>,
-  Time
-> where Integral<PV, Time>: Copy {
+  Time,
+> where
+  Integral<PV, Time>: Copy,
+{
   pub pid: PID<PV, Output, Time>,
   kp_entry: Entry<f64>,
   ki_entry: Entry<f64>,
@@ -160,16 +167,16 @@ pub struct TunablePID<
   error_pub: Publisher<f64>,
   pv_pub: Publisher<f64>,
   integral_sum_pub: Publisher<f64>,
-  output_pub: Publisher<f64>
+  output_pub: Publisher<f64>,
 }
 
 impl<
-  PV: Mul<Time> + Div<Time> + Copy,
-  Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Copy,
-  Time: Copy
-> TunablePID<PV, Output, Time>
+    PV: Mul<Time> + Div<Time> + Copy,
+    Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Copy,
+    Time: Copy,
+  > TunablePID<PV, Output, Time>
 where
-  Integral<PV, Time>: Copy
+  Integral<PV, Time>: Copy,
 {
   pub fn new(topic: Topic, pid: PID<PV, Output, Time>) -> Self {
     Self {
@@ -181,18 +188,18 @@ where
       error_pub: topic.child("error").publish(),
       pv_pub: topic.child("processvariable").publish(),
       integral_sum_pub: topic.child("integralsum").publish(),
-      output_pub: topic.child("output").publish()
+      output_pub: topic.child("output").publish(),
     }
   }
 }
 
 impl<
-  PV: Mul<Time> + Div<Time> + Copy + ToFloat,
-  Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy,
-  Time: Sub<Time, Output = Time> + Copy
-> HasSetpoint<PV> for TunablePID<PV, Output, Time>
+    PV: Mul<Time> + Div<Time> + Copy + ToFloat,
+    Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy,
+    Time: Sub<Time, Output = Time> + Copy,
+  > HasSetpoint<PV> for TunablePID<PV, Output, Time>
 where
-  Integral<PV, Time>: Copy
+  Integral<PV, Time>: Copy,
 {
   fn set_setpoint(&mut self, sp: PV) {
     self.pid.set_setpoint(sp);
@@ -201,10 +208,15 @@ where
 }
 
 impl<
-  PV: Mul<Time> + Div<Time> + Copy + ToFloat,
-  Output: Div<PV> + Div<<PV as Mul<Time>>::Output> + Div<<PV as Div<Time>>::Output> + Zero + Copy + ToFloat,
-  Time: Sub<Time, Output = Time> + Copy
-> StatefulTransform<PV, Time> for TunablePID<PV, Output, Time>
+    PV: Mul<Time> + Div<Time> + Copy + ToFloat,
+    Output: Div<PV>
+      + Div<<PV as Mul<Time>>::Output>
+      + Div<<PV as Div<Time>>::Output>
+      + Zero
+      + Copy
+      + ToFloat,
+    Time: Sub<Time, Output = Time> + Copy,
+  > StatefulTransform<PV, Time> for TunablePID<PV, Output, Time>
 where
   PV: Mul<Kp<PV, Output>, Output = Output> + Sub<PV, Output = PV>,
   Integral<PV, Time>: Copy + Zero + Mul<Ki<PV, Output, Time>, Output = Output> + ToFloat,
@@ -217,18 +229,30 @@ where
 
   fn calculate(&mut self, input: PV, time: Time) -> Output {
     match self.kp_entry.get() {
-      Some(Ok(kp)) => { self.pid.kp = FromFloat::from_f64(kp); },
-      _ => { self.kp_entry.set(self.pid.kp.to_f64()).ok(); },
+      Some(Ok(kp)) => {
+        self.pid.kp = FromFloat::from_f64(kp);
+      }
+      _ => {
+        self.kp_entry.set(self.pid.kp.to_f64()).ok();
+      }
     }
 
     match self.ki_entry.get() {
-      Some(Ok(ki)) => { self.pid.ki = FromFloat::from_f64(ki); },
-      _ => { self.ki_entry.set(self.pid.ki.to_f64()).ok(); },
+      Some(Ok(ki)) => {
+        self.pid.ki = FromFloat::from_f64(ki);
+      }
+      _ => {
+        self.ki_entry.set(self.pid.ki.to_f64()).ok();
+      }
     }
 
     match self.kd_entry.get() {
-      Some(Ok(kd)) => { self.pid.kd = FromFloat::from_f64(kd); },
-      _ => { self.kd_entry.set(self.pid.kd.to_f64()).ok(); },
+      Some(Ok(kd)) => {
+        self.pid.kd = FromFloat::from_f64(kd);
+      }
+      _ => {
+        self.kd_entry.set(self.pid.kd.to_f64()).ok();
+      }
     }
 
     let output = self.pid.calculate(input, time);

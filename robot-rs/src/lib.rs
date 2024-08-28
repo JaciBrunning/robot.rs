@@ -6,8 +6,8 @@ pub use ntcore_rs as ntcore;
 
 pub use robot_rs_macros as macros;
 
-pub mod actuators;
 pub mod activity;
+pub mod actuators;
 pub mod input;
 pub mod physics;
 pub mod sensors;
@@ -23,31 +23,39 @@ pub use robot_rs_units as units;
 
 pub enum RuntimeType {
   Native,
-  Simulation
+  Simulation,
 }
 
 #[cfg(feature = "native")]
 #[macro_export]
 macro_rules! runtime_type {
-  () => { RuntimeType::Native };
+  () => {
+    RuntimeType::Native
+  };
 }
 
 #[cfg(feature = "native")]
 #[macro_export]
 macro_rules! with_runtime {
-  (native $b:block) => { $b };
+  (native $b:block) => {
+    $b
+  };
   (simulation $b:block) => {};
 }
 
 #[cfg(feature = "simulation")]
 #[macro_export]
 macro_rules! runtime_type {
-    () => { RuntimeType::Simulation };
+  () => {
+    RuntimeType::Simulation
+  };
 }
 
 #[cfg(feature = "simulation")]
 #[macro_export]
 macro_rules! with_runtime {
   (native $b:block) => {};
-  (simulation $b:block) => { $b };
+  (simulation $b:block) => {
+    $b
+  };
 }

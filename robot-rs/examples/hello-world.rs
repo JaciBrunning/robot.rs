@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use log::info;
-use robot_rs::{start::{RobotResult, RobotState}, robot_main};
+use robot_rs::{
+  robot_main,
+  start::{RobotResult, RobotState},
+};
 
 fn my_robot(state: RobotState) -> RobotResult {
   while state.running() {

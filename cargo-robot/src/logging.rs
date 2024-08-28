@@ -1,4 +1,7 @@
-use std::{fmt, sync::atomic::{Ordering, AtomicUsize}};
+use std::{
+  fmt,
+  sync::atomic::{AtomicUsize, Ordering},
+};
 
 use env_logger::fmt::Color;
 
@@ -37,9 +40,13 @@ pub(crate) fn init() {
       let mut message_style = f.style();
 
       match record.level() {
-        log::Level::Error => { message_style.set_bold(true).set_color(Color::Red); },
-        log::Level::Warn => { message_style.set_color(Color::Yellow); },
-        _ => ()
+        log::Level::Error => {
+          message_style.set_bold(true).set_color(Color::Red);
+        }
+        log::Level::Warn => {
+          message_style.set_color(Color::Yellow);
+        }
+        _ => (),
       };
 
       let mut style = f.style();
@@ -50,7 +57,14 @@ pub(crate) fn init() {
 
       let time = f.timestamp_millis();
 
-      writeln!(f, " {} {:>5} {} > {}", time, level, target, message_style.value(format!("{}", record.args())))
+      writeln!(
+        f,
+        " {} {:>5} {} > {}",
+        time,
+        level,
+        target,
+        message_style.value(format!("{}", record.args()))
+      )
     })
     .init();
 }

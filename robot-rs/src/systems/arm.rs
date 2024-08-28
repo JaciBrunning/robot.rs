@@ -1,9 +1,25 @@
-use std::{sync::{Arc, RwLock}, time::Duration};
+use std::{
+  sync::{Arc, RwLock},
+  time::Duration,
+};
 
 use num_traits::Zero;
-use robot_rs_units::{Angle, electrical::{Voltage, volt}, Mass, Length, Time, radian, millisecond, motion::{rads_per_second, meters_per_second2}, traits::Angle as _, QuantityBase as _};
+use robot_rs_units::{
+  electrical::{volt, Voltage},
+  millisecond,
+  motion::{meters_per_second2, rads_per_second},
+  radian,
+  traits::Angle as _,
+  Angle, Length, Mass, QuantityBase as _, Time,
+};
 
-use crate::{transforms::{HasSetpoint, StatefulTransform}, actuators::VoltageActuator, physics::motor::MotorForwardDynamics, sensors::{StatefulAngularSensor, StatefulBinarySensor}, time::now};
+use crate::{
+  actuators::VoltageActuator,
+  physics::motor::MotorForwardDynamics,
+  sensors::{StatefulAngularSensor, StatefulBinarySensor},
+  time::now,
+  transforms::{HasSetpoint, StatefulTransform},
+};
 
 pub trait GenericArm {
   fn go_idle(&mut self);
@@ -14,7 +30,7 @@ pub trait GenericArm {
 }
 
 #[async_trait::async_trait]
-pub trait AwaitableArm : GenericArm {
+pub trait AwaitableArm: GenericArm {
   async fn go_to_angle_wait(&mut self, angle: Angle);
   async fn wait_for_stable(&self);
 }
@@ -24,7 +40,7 @@ pub enum ArmDemand {
   Disabled,
   Idle,
   Angle { angle: Angle },
-  Manual { voltage: Voltage }
+  Manual { voltage: Voltage },
 }
 
 #[derive(Debug, Clone)]
@@ -34,14 +50,14 @@ pub enum ArmStateMode {
   Manual,
   Limited,
   Stable,
-  Moving
+  Moving,
 }
 
 #[derive(Debug, Clone)]
 pub struct ArmState {
   pub angle: Angle,
   pub applied_voltage: Voltage,
-  pub mode: ArmStateMode
+  pub mode: ArmStateMode,
 }
 
 #[derive(Clone, Debug)]
@@ -54,11 +70,14 @@ pub struct ArmFrontend {
 pub struct ArmParams {
   pub effective_mass: Mass,
   pub center_of_mass_length: Length,
-  pub limits: (Angle, Angle)
+  pub limits: (Angle, Angle),
 }
 
-pub trait Controller : StatefulTransform<Angle, Time, Output=Voltage> + HasSetpoint<Angle> {}
-impl<T: StatefulTransform<Angle, Time, Output=Voltage> + HasSetpoint<Angle>> Controller for T {}
+pub trait Controller:
+  StatefulTransform<Angle, Time, Output = Voltage> + HasSetpoint<Angle>
+{
+}
+impl<T: StatefulTransform<Angle, Time, Output = Voltage> + HasSetpoint<Angle>> Controller for T {}
 
 pub struct Arm {
   params: ArmParams,
@@ -66,12 +85,15 @@ pub struct Arm {
   actuator: Box<dyn VoltageActuator + Send + Sync>,
   motor_model: Box<dyn MotorForwardDynamics + Send + Sync>,
   angle_sensor: Box<dyn StatefulAngularSensor + Send + Sync>,
-  limit_switches: (Option<Box<dyn StatefulBinarySensor + Send + Sync>>, Option<Box<dyn StatefulBinarySensor + Send + Sync>>),
-  
-  controller: Box<dyn Controller + Send + Sync>,
-  stability_filter: Box<dyn StatefulTransform<Angle, Time, Output=bool> + Send + Sync>,
+  limit_switches: (
+    Option<Box<dyn StatefulBinarySensor + Send + Sync>>,
+    Option<Box<dyn StatefulBinarySensor + Send + Sync>>,
+  ),
 
-  frontend: ArmFrontend
+  controller: Box<dyn Controller + Send + Sync>,
+  stability_filter: Box<dyn StatefulTransform<Angle, Time, Output = bool> + Send + Sync>,
+
+  frontend: ArmFrontend,
 }
 
 impl Arm {
@@ -80,19 +102,29 @@ impl Arm {
     actuator: Box<dyn VoltageActuator + Send + Sync>,
     motor_model: Box<dyn MotorForwardDynamics + Send + Sync>,
     angle_sensor: Box<dyn StatefulAngularSensor + Send + Sync>,
-    limit_switches: (Option<Box<dyn StatefulBinarySensor + Send + Sync>>, Option<Box<dyn StatefulBinarySensor + Send + Sync>>),
+    limit_switches: (
+      Option<Box<dyn StatefulBinarySensor + Send + Sync>>,
+      Option<Box<dyn StatefulBinarySensor + Send + Sync>>,
+    ),
     controller: Box<dyn Controller + Send + Sync>,
-    stability_filter: Box<dyn StatefulTransform<Angle, Time, Output=bool> + Send + Sync>
+    stability_filter: Box<dyn StatefulTransform<Angle, Time, Output = bool> + Send + Sync>,
   ) -> Self {
     Self {
       params,
-      actuator, motor_model, angle_sensor, 
+      actuator,
+      motor_model,
+      angle_sensor,
       limit_switches,
-      controller, stability_filter,
+      controller,
+      stability_filter,
       frontend: ArmFrontend {
         demand: Arc::new(RwLock::new((ArmDemand::Disabled, true))),
-        state: Arc::new(RwLock::new(ArmState { angle: 0.0 * radian, applied_voltage: 0.0 * volt, mode: ArmStateMode::Disabled }))
-      }
+        state: Arc::new(RwLock::new(ArmState {
+          angle: 0.0 * radian,
+          applied_voltage: 0.0 * volt,
+          mode: ArmStateMode::Disabled,
+        })),
+      },
     }
   }
 
@@ -102,11 +134,28 @@ impl Arm {
 
   pub fn tick(&mut self, time: Time) {
     let current_angle = self.angle_sensor.get_angle();
-    let feedforward = self.motor_model.voltage(-9.81 * meters_per_second2 * current_angle.cos() * self.params.effective_mass * self.params.center_of_mass_length, 0.0 * rads_per_second);
+    let feedforward = self.motor_model.voltage(
+      -9.81
+        * meters_per_second2
+        * current_angle.cos()
+        * self.params.effective_mass
+        * self.params.center_of_mass_length,
+      0.0 * rads_per_second,
+    );
 
     let limits_hit = (
-      self.limit_switches.0.as_mut().map(|x| x.get_sensor_value()).unwrap_or(false),
-      self.limit_switches.1.as_mut().map(|x| x.get_sensor_value()).unwrap_or(false)
+      self
+        .limit_switches
+        .0
+        .as_mut()
+        .map(|x| x.get_sensor_value())
+        .unwrap_or(false),
+      self
+        .limit_switches
+        .1
+        .as_mut()
+        .map(|x| x.get_sensor_value())
+        .unwrap_or(false),
     );
 
     let current_demand = self.frontend.demand.read().unwrap().clone();
@@ -122,8 +171,11 @@ impl Arm {
           self.controller.reset();
           self.frontend.demand.write().unwrap().1 = false;
         }
-        
-        let state = if self.stability_filter.calculate(target - current_angle, time) {
+
+        let state = if self
+          .stability_filter
+          .calculate(target - current_angle, time)
+        {
           ArmStateMode::Stable
         } else {
           ArmStateMode::Moving
@@ -138,12 +190,12 @@ impl Arm {
       ((true, false), voltage) if voltage < Zero::zero() => {
         demand_voltage = Zero::zero();
         state_mode = ArmStateMode::Limited;
-      },
+      }
       ((false, true), voltage) if voltage > feedforward => {
         demand_voltage = feedforward;
         state_mode = ArmStateMode::Limited;
-      },
-      _ => ()
+      }
+      _ => (),
     }
 
     self.actuator.set_actuator_value(demand_voltage, time);
@@ -179,7 +231,10 @@ impl GenericArm for Arm {
   }
 
   fn is_stable(&self) -> bool {
-    matches!(self.frontend.state.read().unwrap().mode, ArmStateMode::Stable)
+    matches!(
+      self.frontend.state.read().unwrap().mode,
+      ArmStateMode::Stable
+    )
   }
 }
 
@@ -220,11 +275,22 @@ impl AwaitableArm for ArmFrontend {
 pub mod sim {
   use std::time::Duration;
 
-use ntcore_rs::GenericPublisher as _;
-use num_traits::Zero;
-use robot_rs_units::{Time, electrical::{Voltage, volt}, Angle, motion::{AngularVelocity, meters_per_second2, degrees_per_second}, millisecond, QuantityBase as _, traits::{Angle as _, MaybeUnitNumber as _}, radian, force::newton_meter, ampere, degree};
+  use ntcore_rs::GenericPublisher as _;
+  use num_traits::Zero;
+  use robot_rs_units::{
+    ampere, degree,
+    electrical::{volt, Voltage},
+    force::newton_meter,
+    millisecond,
+    motion::{degrees_per_second, meters_per_second2, AngularVelocity},
+    radian,
+    traits::{Angle as _, MaybeUnitNumber as _},
+    Angle, QuantityBase as _, Time,
+  };
 
-  use crate::{actuators::sim::SimActuator, physics::motor::MotorDynamics, sensors::sim::SimSensor, time::now};
+  use crate::{
+    actuators::sim::SimActuator, physics::motor::MotorDynamics, sensors::sim::SimSensor, time::now,
+  };
 
   use super::ArmParams;
 
@@ -234,7 +300,10 @@ use robot_rs_units::{Time, electrical::{Voltage, volt}, Angle, motion::{AngularV
     actuator: Box<dyn SimActuator<Voltage, Time> + Send + Sync>,
     motor_model: Box<dyn MotorDynamics + Send + Sync>,
     angle_sensor: Box<dyn SimSensor<Angle> + Send + Sync>,
-    limit_switches: (Option<Box<dyn SimSensor<bool> + Send + Sync>>, Option<Box<dyn SimSensor<bool> + Send + Sync>>),
+    limit_switches: (
+      Option<Box<dyn SimSensor<bool> + Send + Sync>>,
+      Option<Box<dyn SimSensor<bool> + Send + Sync>>,
+    ),
 
     last_tick: Option<Time>,
     speed: AngularVelocity,
@@ -252,7 +321,10 @@ use robot_rs_units::{Time, electrical::{Voltage, volt}, Angle, motion::{AngularV
       actuator: Box<dyn SimActuator<Voltage, Time> + Send + Sync>,
       motor_model: Box<dyn MotorDynamics + Send + Sync>,
       angle_sensor: Box<dyn SimSensor<Angle> + Send + Sync>,
-      limit_switches: (Option<Box<dyn SimSensor<bool> + Send + Sync>>, Option<Box<dyn SimSensor<bool> + Send + Sync>>),
+      limit_switches: (
+        Option<Box<dyn SimSensor<bool> + Send + Sync>>,
+        Option<Box<dyn SimSensor<bool> + Send + Sync>>,
+      ),
       topic: ntcore_rs::Topic,
     ) -> Self {
       Self {
@@ -280,10 +352,18 @@ use robot_rs_units::{Time, electrical::{Voltage, volt}, Angle, motion::{AngularV
         let torque = self.motor_model.torque(demand_volts, self.speed);
         let current_draw = self.motor_model.current(torque);
 
-        let torque_down = 9.81 * meters_per_second2 * current_angle.cos() * self.params.effective_mass * self.params.center_of_mass_length;
+        let torque_down = 9.81
+          * meters_per_second2
+          * current_angle.cos()
+          * self.params.effective_mass
+          * self.params.center_of_mass_length;
         let net_torque = torque - torque_down;
         // Assumes point load at radius
-        let angular_accel = net_torque / (self.params.effective_mass * self.params.center_of_mass_length * self.params.center_of_mass_length) * (1.0 * radian);
+        let angular_accel = net_torque
+          / (self.params.effective_mass
+            * self.params.center_of_mass_length
+            * self.params.center_of_mass_length)
+          * (1.0 * radian);
         let max_speed = self.motor_model.speed(demand_volts, 0.0 * newton_meter);
 
         self.speed += angular_accel * dt;
@@ -304,13 +384,20 @@ use robot_rs_units::{Time, electrical::{Voltage, volt}, Angle, motion::{AngularV
           limit_triggered.1 = true;
         }
 
-        if let Some(sw) = self.limit_switches.0.as_mut() { sw.set_sensor_value(limit_triggered.0, time) }
-        if let Some(sw) = self.limit_switches.1.as_mut() { sw.set_sensor_value(limit_triggered.1, time) }
+        if let Some(sw) = self.limit_switches.0.as_mut() {
+          sw.set_sensor_value(limit_triggered.0, time)
+        }
+        if let Some(sw) = self.limit_switches.1.as_mut() {
+          sw.set_sensor_value(limit_triggered.1, time)
+        }
 
         self.pub_demand.set(demand_volts.to::<volt>()).ok();
         self.pub_torque.set(torque.to::<newton_meter>()).ok();
         self.pub_current.set(current_draw.to::<ampere>()).ok();
-        self.pub_speed.set(self.speed.to::<degrees_per_second>()).ok();
+        self
+          .pub_speed
+          .set(self.speed.to::<degrees_per_second>())
+          .ok();
         self.pub_angle.set(new_angle.to::<degree>()).ok();
 
         self.angle_sensor.set_sensor_value(new_angle, time);

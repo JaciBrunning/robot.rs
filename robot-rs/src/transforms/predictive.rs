@@ -1,8 +1,13 @@
-use robot_rs_units::{Current, electrical::Voltage, motion::AngularVelocity, traits::MaybeUnitNumber, Time};
+use robot_rs_units::{
+  electrical::Voltage, motion::AngularVelocity, traits::MaybeUnitNumber, Current, Time,
+};
 
-use crate::{physics::motor::{MotorCurrentDynamics, MotorForwardDynamics}, sensors::{AngularVelocitySensor, StatefulAngularVelocitySensor}};
+use crate::{
+  physics::motor::{MotorCurrentDynamics, MotorForwardDynamics},
+  sensors::{AngularVelocitySensor, StatefulAngularVelocitySensor},
+};
 
-use super::{Transform, StatefulTransform};
+use super::{StatefulTransform, Transform};
 
 #[derive(Clone)]
 pub struct CurrentLimitTransform<Motor, Sensor> {
@@ -18,30 +23,40 @@ impl<Motor, Sensor> CurrentLimitTransform<Motor, Sensor> {
 }
 
 impl<
-  Motor: MotorCurrentDynamics + MotorForwardDynamics,
-  Sensor: crate::sensors::Sensor<AngularVelocity>,
-> Transform<Voltage> for CurrentLimitTransform<Motor, Sensor> {
+    Motor: MotorCurrentDynamics + MotorForwardDynamics,
+    Sensor: crate::sensors::Sensor<AngularVelocity>,
+  > Transform<Voltage> for CurrentLimitTransform<Motor, Sensor>
+{
   type Output = Voltage;
 
   fn calculate(&self, input: Voltage) -> Self::Output {
     let speed = self.sensor.get_angular_velocity();
-    let v_min = self.motor.voltage(self.motor.torque_from_current(-self.lim), speed);
-    let v_max = self.motor.voltage(self.motor.torque_from_current(self.lim), speed);
+    let v_min = self
+      .motor
+      .voltage(self.motor.torque_from_current(-self.lim), speed);
+    let v_max = self
+      .motor
+      .voltage(self.motor.torque_from_current(self.lim), speed);
 
     input.max(v_min).min(v_max)
   }
 }
 
 impl<
-  Motor: MotorCurrentDynamics + MotorForwardDynamics,
-  Sensor: crate::sensors::StatefulSensor<AngularVelocity>,
-> StatefulTransform<Voltage, Time> for CurrentLimitTransform<Motor, Sensor> {
+    Motor: MotorCurrentDynamics + MotorForwardDynamics,
+    Sensor: crate::sensors::StatefulSensor<AngularVelocity>,
+  > StatefulTransform<Voltage, Time> for CurrentLimitTransform<Motor, Sensor>
+{
   type Output = Voltage;
 
   fn calculate(&mut self, input: Voltage, _time: Time) -> Self::Output {
     let speed = self.sensor.get_angular_velocity();
-    let v_min = self.motor.voltage(self.motor.torque_from_current(-self.lim), speed);
-    let v_max = self.motor.voltage(self.motor.torque_from_current(self.lim), speed);
+    let v_min = self
+      .motor
+      .voltage(self.motor.torque_from_current(-self.lim), speed);
+    let v_max = self
+      .motor
+      .voltage(self.motor.torque_from_current(self.lim), speed);
 
     input.max(v_min).min(v_max)
   }

@@ -11,10 +11,15 @@ fn main() {
   let profile_str = std::env::var("PROFILE").unwrap();
   let profile = match profile_str.as_str() {
     "debug" => Profile::Debug,
-    _ => Profile::Release
+    _ => Profile::Release,
   };
 
-  let (header_dirs, linktime_dirs, _runtime_dirs) = maybe_download_libs(get_meta().unwrap().root_package().unwrap(), target.as_str(), profile).unwrap();
+  let (header_dirs, linktime_dirs, _runtime_dirs) = maybe_download_libs(
+    get_meta().unwrap().root_package().unwrap(),
+    target.as_str(),
+    profile,
+  )
+  .unwrap();
   link_against(target.as_str(), linktime_dirs).unwrap();
 
   // Needed to always download libs
@@ -24,14 +29,20 @@ fn main() {
   let bindings = bindgen::Builder::default()
     .header("HALWrapper.h")
     .derive_default(true)
-    .clang_args(header_dirs.iter().map(|x| format!("-I{}", x.as_os_str().to_string_lossy())))
+    .clang_args(
+      header_dirs
+        .iter()
+        .map(|x| format!("-I{}", x.as_os_str().to_string_lossy())),
+    )
     .allowlist_type(SYMBOL_REGEX)
     .allowlist_function(SYMBOL_REGEX)
     .allowlist_var(SYMBOL_REGEX)
-    .default_enum_style(bindgen::EnumVariation::Rust { non_exhaustive: false })
+    .default_enum_style(bindgen::EnumVariation::Rust {
+      non_exhaustive: false,
+    })
     .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
     .clang_args(&[
-      format!("--target={}", target)    // See: https://github.com/rust-lang/rust-bindgen/issues/1760
+      format!("--target={}", target), // See: https://github.com/rust-lang/rust-bindgen/issues/1760
     ])
     .generate()
     .expect("Unable to generate bindings");

@@ -1,12 +1,15 @@
 use std::ops::Div;
 
-use robot_rs_units::{Ticks, Angle, Length, motion::{TickVelocity, AngularVelocity, Velocity}, radian};
+use robot_rs_units::{
+  motion::{AngularVelocity, TickVelocity, Velocity},
+  radian, Angle, Length, Ticks,
+};
 
-use super::{Transform, ReversibleTransform};
+use super::{ReversibleTransform, Transform};
 
 #[derive(Clone, Debug)]
 pub struct EncoderToAngular {
-  pub factor: <Angle as Div<Ticks>>::Output
+  pub factor: <Angle as Div<Ticks>>::Output,
 }
 
 impl EncoderToAngular {
@@ -45,7 +48,7 @@ impl ReversibleTransform<TickVelocity> for EncoderToAngular {
 
 #[derive(Clone, Debug)]
 pub struct AngularToLinear {
-  pub radius: Length
+  pub radius: Length,
 }
 
 impl AngularToLinear {
@@ -77,7 +80,10 @@ impl ReversibleTransform<Angle> for AngularToLinear {
 }
 
 impl ReversibleTransform<AngularVelocity> for AngularToLinear {
-  fn calculate_reverse(&self, output: <Self as Transform<AngularVelocity>>::Output) -> AngularVelocity {
+  fn calculate_reverse(
+    &self,
+    output: <Self as Transform<AngularVelocity>>::Output,
+  ) -> AngularVelocity {
     (output / self.radius) * (1.0 * radian)
   }
 }

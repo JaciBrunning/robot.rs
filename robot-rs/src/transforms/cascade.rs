@@ -5,12 +5,16 @@ use super::{HasSetpoint, StatefulTransform};
 pub struct CascadeTransform<A, B, Time> {
   pub a: A,
   pub b: B,
-  time: PhantomData<Time>
+  time: PhantomData<Time>,
 }
 
 impl<A, B, Time> CascadeTransform<A, B, Time> {
   pub fn new(a: A, b: B) -> Self {
-    Self { a, b, time: PhantomData }
+    Self {
+      a,
+      b,
+      time: PhantomData,
+    }
   }
 }
 
@@ -24,7 +28,7 @@ impl<A, B, I, J, Time> StatefulTransform<(I, J), Time> for CascadeTransform<A, B
 where
   A: StatefulTransform<I, Time>,
   B: HasSetpoint<A::Output> + StatefulTransform<J, Time>,
-  Time: Copy
+  Time: Copy,
 {
   type Output = <B as StatefulTransform<J, Time>>::Output;
 

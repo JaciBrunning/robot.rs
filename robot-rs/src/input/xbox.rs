@@ -1,8 +1,8 @@
 use crate::traits::Wrapper;
 
-use super::hid::HIDDevice;
 #[cfg(feature = "hal")]
 use super::hid::DriverStationHID;
+use super::hid::HIDDevice;
 
 pub trait XboxController {
   type HID: HIDDevice;
@@ -61,25 +61,61 @@ impl<HID: HIDDevice> Xbox<HID> {
 impl<HID: HIDDevice> XboxController for Xbox<HID> {
   type HID = HID;
 
-  fn inner(&self) -> &HID { &self.0 }
+  fn inner(&self) -> &HID {
+    &self.0
+  }
 
-  fn left_x(&self) -> HID::Axis { self.0.axis(0) }
-  fn left_y(&self) -> HID::Axis { self.0.axis(1) }
-  fn left_trigger(&self) -> HID::Axis { self.0.axis(2) }
-  fn right_trigger(&self) -> HID::Axis { self.0.axis(3) }
-  fn right_x(&self) -> HID::Axis { self.0.axis(4) }
-  fn right_y(&self) -> HID::Axis { self.0.axis(5) }
+  fn left_x(&self) -> HID::Axis {
+    self.0.axis(0)
+  }
+  fn left_y(&self) -> HID::Axis {
+    self.0.axis(1)
+  }
+  fn left_trigger(&self) -> HID::Axis {
+    self.0.axis(2)
+  }
+  fn right_trigger(&self) -> HID::Axis {
+    self.0.axis(3)
+  }
+  fn right_x(&self) -> HID::Axis {
+    self.0.axis(4)
+  }
+  fn right_y(&self) -> HID::Axis {
+    self.0.axis(5)
+  }
 
-  fn dpad(&self) -> HID::POV { self.0.pov(0) }
+  fn dpad(&self) -> HID::POV {
+    self.0.pov(0)
+  }
 
-  fn a(&self) -> HID::Button { self.0.button(1) }
-  fn b(&self) -> HID::Button { self.0.button(2) }
-  fn x(&self) -> HID::Button { self.0.button(3) }
-  fn y(&self) -> HID::Button { self.0.button(4) }
-  fn left_bumper(&self) -> HID::Button { self.0.button(5) }
-  fn right_bumper(&self) -> HID::Button { self.0.button(6) }
-  fn back(&self) -> HID::Button { self.0.button(7) }
-  fn start(&self) -> HID::Button { self.0.button(8) }
-  fn left_stick(&self) -> HID::Button { self.0.button(9) }
-  fn right_stick(&self) -> HID::Button { self.0.button(10) }
+  fn a(&self) -> HID::Button {
+    self.0.button(1)
+  }
+  fn b(&self) -> HID::Button {
+    self.0.button(2)
+  }
+  fn x(&self) -> HID::Button {
+    self.0.button(3)
+  }
+  fn y(&self) -> HID::Button {
+    self.0.button(4)
+  }
+  fn left_bumper(&self) -> HID::Button {
+    self.0.button(5)
+  }
+  fn right_bumper(&self) -> HID::Button {
+    self.0.button(6)
+  }
+  fn back(&self) -> HID::Button {
+    self.0.button(7)
+  }
+  fn start(&self) -> HID::Button {
+    self.0.button(8)
+  }
+  fn left_stick(&self) -> HID::Button {
+    self.0.button(9)
+  }
+  fn right_stick(&self) -> HID::Button {
+    self.0.button(10)
+  }
 }

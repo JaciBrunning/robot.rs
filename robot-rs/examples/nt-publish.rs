@@ -1,9 +1,13 @@
 use std::time::Duration;
 
 use ntcore_rs::topic::GenericPublisher;
-use robot_rs::{start::{RobotResult, RobotState}, robot_main, ntcore::instance::NetworkTableInstance};
+use robot_rs::{
+  ntcore::instance::NetworkTableInstance,
+  robot_main,
+  start::{RobotResult, RobotState},
+};
 
-fn my_robot(state: RobotState) -> RobotResult {  
+fn my_robot(state: RobotState) -> RobotResult {
   let topic = NetworkTableInstance::default().topic("/testtopic/some_value");
   let entry = topic.entry();
   while state.running() {

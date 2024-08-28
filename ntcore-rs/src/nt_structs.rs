@@ -3,7 +3,7 @@ use std::{error::Error, io::Read};
 use bytes::BufMut;
 pub use bytes::BytesMut;
 
-pub trait NTStruct : Sized {
+pub trait NTStruct: Sized {
   const TYPE_STRING_FRAG: &'static str;
   fn get_full_type_string() -> String {
     format!("struct:{}", Self::TYPE_STRING_FRAG)
@@ -40,7 +40,7 @@ macro_rules! nt_struct_int_t {
   ($ty:ty, $type_str:literal, $schema:literal) => {
     impl NTStruct for $ty {
       const TYPE_STRING_FRAG: &'static str = $type_str;
-    
+
       fn get_schema() -> String {
         $schema.to_owned()
       }
@@ -51,7 +51,7 @@ macro_rules! nt_struct_int_t {
         buf.put(&self.to_le_bytes()[..]);
         Ok(())
       }
-    
+
       fn read(buf: &mut BytesMut) -> Result<Self, Box<dyn Error>> {
         let mut b = [0u8; Self::BITS as usize / 8];
         let new = buf.split_to(b.len());
@@ -59,7 +59,7 @@ macro_rules! nt_struct_int_t {
         Ok(Self::from_le_bytes(b))
       }
     }
-  }
+  };
 }
 
 nt_struct_int_t!(u8, "uint8", "uint8 value");
@@ -78,7 +78,9 @@ impl NTStruct for f32 {
     "float value".to_owned()
   }
 
-  fn publish_schema(inst: u32) {}
+  fn publish_schema(_inst: u32) {
+    todo!()
+  }
 
   fn write(&self, buf: &mut BytesMut) -> Result<(), Box<dyn Error>> {
     let as_u32 = unsafe { std::mem::transmute::<f32, u32>(*self) };
